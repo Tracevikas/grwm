@@ -1,11 +1,18 @@
 import Link from "next/link";
 import { dateParts } from "@/lib/photos";
 import { LinkPending } from "./LinkPending";
+import { ProfileLink } from "./ProfileLink";
 import type { Outfit } from "@/lib/types";
 
 export type DiaryEntry = Outfit & { pieces: number; url: string | undefined; lookUrl?: string };
 
-export function DiaryView({ outfits }: { outfits: DiaryEntry[] }) {
+type Props = {
+  outfits: DiaryEntry[];
+  /** Signed-in user, for the avatar link to their profile. */
+  me?: { name: string; avatarUrl: string | null };
+};
+
+export function DiaryView({ outfits, me }: Props) {
   // Group by month; outfits arrive newest first.
   const months: { month: string; entries: DiaryEntry[] }[] = [];
   for (const o of outfits) {
@@ -16,7 +23,10 @@ export function DiaryView({ outfits }: { outfits: DiaryEntry[] }) {
 
   return (
     <div className="space-y-8">
-      <h1 className="display text-6xl font-bold">Diary</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="display text-6xl font-bold">Diary</h1>
+        {me && <ProfileLink name={me.name} avatarUrl={me.avatarUrl} />}
+      </div>
 
       {outfits.length === 0 ? (
         <div className="space-y-4">

@@ -7,7 +7,7 @@ import { CountUp } from "./CountUp";
 import { InstallPrompt } from "./InstallPrompt";
 import { ItemCard } from "./ItemCard";
 import { Spectrum } from "./Spectrum";
-import { SubmitButton } from "./SubmitButton";
+import { ProfileLink } from "./ProfileLink";
 import { Wordmark } from "./Wordmark";
 
 export const SORTS = {
@@ -30,7 +30,8 @@ type Props = {
   items: ItemWithPhoto[];
   bands: SpectrumBand[];
   filters: WardrobeFilters;
-  signOut?: () => Promise<void>;
+  /** Signed-in user, for the avatar link to their profile. */
+  me?: { name: string; avatarUrl: string | null };
 };
 
 export function wardrobeHref(filters: WardrobeFilters, next: Partial<Record<keyof WardrobeFilters, string | null>>) {
@@ -41,7 +42,7 @@ export function wardrobeHref(filters: WardrobeFilters, next: Partial<Record<keyo
   return s ? `/?${s}` : "/";
 }
 
-export function WardrobeView({ total, items, bands, filters, signOut }: Props) {
+export function WardrobeView({ total, items, bands, filters, me }: Props) {
   const href = (next: Parameters<typeof wardrobeHref>[1]) => wardrobeHref(filters, next);
   const filtered = Boolean(filters.category || filters.color || filters.q);
 
@@ -49,13 +50,7 @@ export function WardrobeView({ total, items, bands, filters, signOut }: Props) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <Wordmark className="text-lg" />
-        {signOut && (
-          <form action={signOut}>
-            <SubmitButton pendingLabel="Signing out…" className="rounded-full px-3 py-1.5 text-sm text-muted hover:bg-surface hover:text-foreground">
-              Sign out
-            </SubmitButton>
-          </form>
-        )}
+        {me && <ProfileLink name={me.name} avatarUrl={me.avatarUrl} />}
       </div>
 
       <InstallPrompt />

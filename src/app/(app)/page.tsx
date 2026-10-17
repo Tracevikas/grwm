@@ -5,7 +5,7 @@ import { spectrum } from "@/lib/colors";
 import { withCoverPhotos } from "@/lib/queries";
 import { getUser } from "@/lib/supabase/server";
 import { CATEGORIES, type Category, type WardrobeItem } from "@/lib/types";
-import { signOut } from "../login/actions";
+import { profileOf } from "@/lib/profile";
 
 const ORDER: Record<SortKey, { column: string; ascending: boolean }> = {
   recent: { column: "last_worn", ascending: false },
@@ -30,7 +30,7 @@ async function Wardrobe(props: PageProps<"/">) {
   // Strip characters that have meaning inside a PostgREST `or` filter.
   const q = typeof params.q === "string" ? params.q.replace(/[,()%*\\]/g, " ").trim() : "";
 
-  const { supabase } = await getUser();
+  const { supabase, user } = await getUser();
 
   let query = supabase
     .from("wardrobe_items_with_stats")
@@ -57,7 +57,7 @@ async function Wardrobe(props: PageProps<"/">) {
       items={items}
       bands={spectrum(everything)}
       filters={{ category, color, sort, q }}
-      signOut={signOut}
+      me={user ? profileOf(user) : undefined}
     />
   );
 }

@@ -86,6 +86,18 @@ drop policy if exists "own outfit items" on public.outfit_items;
 create policy "own outfit items" on public.outfit_items
   for all using (user_id = auth.uid()) with check (user_id = auth.uid());
 
+-- Self-service account deletion (Profile → Delete my account). Only deletes the caller.
+create or replace function public.delete_my_account()
+returns void
+language sql
+security definer
+set search_path = ''
+as $$
+  delete from auth.users where id = auth.uid();
+$$;
+revoke all on function public.delete_my_account() from public, anon;
+grant execute on function public.delete_my_account() to authenticated;
+
 -- Private photo bucket; each user writes under a folder named after their user id.
 insert into storage.buckets (id, name, public)
 values ('outfits', 'outfits', false)

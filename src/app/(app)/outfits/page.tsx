@@ -2,6 +2,7 @@ import { PageShell } from "@/components/PageShell";
 import { DiaryView } from "@/components/DiaryView";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { signPhotos } from "@/lib/photos";
+import { profileOf } from "@/lib/profile";
 import { getUser } from "@/lib/supabase/server";
 import type { Outfit } from "@/lib/types";
 
@@ -16,7 +17,7 @@ export default function OutfitsPage() {
 }
 
 async function Outfits() {
-  const { supabase } = await getUser();
+  const { supabase, user } = await getUser();
   const { data } = await supabase
     .from("outfits")
     .select("*, outfit_items(count)")
@@ -29,6 +30,7 @@ async function Outfits() {
 
   return (
     <DiaryView
+      me={user ? profileOf(user) : undefined}
       outfits={rows.map(({ outfit_items, ...o }) => ({
         ...o,
         pieces: outfit_items[0]?.count ?? 0,

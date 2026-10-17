@@ -60,6 +60,9 @@ export function fakeSupabase(handler: Handler = () => undefined) {
     })),
     remove: vi.fn(async () => ({ data: [], error: null })),
     upload: vi.fn(async () => ({ data: {}, error: null })),
+    list: vi.fn<(folder?: string, options?: object) => Promise<{ data: { id: string | null; name: string }[]; error: null }>>(
+      async () => ({ data: [], error: null }),
+    ),
     createSignedUrls: vi.fn(async (paths: string[]) => ({
       data: paths.map((p) => ({ path: p, signedUrl: `https://signed/${p}` })),
       error: null,
@@ -68,6 +71,7 @@ export function fakeSupabase(handler: Handler = () => undefined) {
 
   const client = {
     from: vi.fn(from),
+    rpc: vi.fn<(fn: string) => Promise<{ data: null; error: { message: string } | null }>>(async () => ({ data: null, error: null })),
     storage: { from: vi.fn(() => storageBucket) },
     auth: {
       getUser: vi.fn(async () => ({ data: { user: { id: "user-1" } } })),
@@ -78,6 +82,7 @@ export function fakeSupabase(handler: Handler = () => undefined) {
         error: null as { message: string } | null,
       })),
       signOut: vi.fn(async () => ({ error: null })),
+      updateUser: vi.fn<(attrs: object) => Promise<{ data: object; error: { message: string } | null }>>(async () => ({ data: {}, error: null })),
       exchangeCodeForSession: vi.fn(async () => ({ error: null })),
     },
   };
