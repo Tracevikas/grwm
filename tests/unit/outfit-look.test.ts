@@ -18,11 +18,22 @@ const verdict = (ok: boolean) => ({
   choices: [{ message: { parsed: { what_it_shows: "x", shows_requested_item: ok, shows_other_items: false } } }],
 });
 
-import { composeLook, isProductShot, makeOutfitLook, piecePrompt, shotMatches } from "@/lib/outfit-look";
+import { IMAGE_CONFIG } from "@/lib/image-config";
+import { composeLook, hasRealTransparency, isProductShot, makeOutfitLook, piecePrompt, shotMatches } from "@/lib/outfit-look";
 
-/** A small opaque PNG standing in for a generated product shot. */
-const png = (w = 40, h = 60) =>
-  sharp({ create: { width: w, height: h, channels: 4, background: { r: 200, g: 180, b: 150, alpha: 1 } } }).png().toBuffer();
+/** A small PNG standing in for a generated product shot: a garment on a transparent background. */
+const png = async (w = 40, h = 60) => {
+  const garment = await sharp({ create: { width: w - 16, height: h - 16, channels: 4, background: { r: 200, g: 180, b: 150, alpha: 1 } } })
+    .png()
+    .toBuffer();
+  return sharp({ create: { width: w, height: h, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
+    .composite([{ input: garment, left: 8, top: 8 }])
+    .png()
+    .toBuffer();
+};
+
+/** A shot where the model painted a solid backdrop instead of transparency. */
+const opaque = () => sharp({ create: { width: 40, height: 60, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 1 } } }).png().toBuffer();
 
 const SHIRT = { id: "shirt", name: "Black button-up shirt", category: "top", description: "Point collar", cutout_path: "u1/cutouts/shirt.webp" };
 const BLAZER = { id: "blazer", name: "Beige blazer", category: "outerwear", description: "Pocket square in pocket", cutout_path: null };
@@ -67,13 +78,15 @@ describe("makeOutfitLook", () => {
     expect(prompts.some((p) => p.includes("Beige blazer (outerwear): Pocket square in pocket"))).toBe(true);
     expect(prompts.some((p) => p.includes("Black button-up shirt (top): Point collar"))).toBe(true);
     for (const [req] of edit.mock.calls) {
-      expect(req).toMatchObject({ model: "gpt-image-2.5-flare", background: "transparent", quality: "high" });
+      expect(req).toMatchObject({
+        model: "gpt-image-2.5-flare",
+        quality: "high",
+        size: "1024x1024",
+        background: "transparent",
+        output_format: "png",
+      });
       expect(req.image).toBeInstanceOf(File);
     }
-    // Tall garments get a portrait canvas.
-    const requestFor = (name: string) => edit.mock.calls.find((c) => c[0].prompt.includes(`\n\n${name} (`))![0];
-    expect(requestFor("Beige blazer").size).toBe("1024x1536");
-    expect(requestFor("Black button-up shirt").size).toBe("1024x1024");
   });
 
   it("saves each shot as the piece's image, replacing its old cut-out", async () => {
@@ -112,11 +125,34 @@ describe("makeOutfitLook", () => {
     expect(callsTo(calls, "wardrobe_items", "update")).toHaveLength(1);
   });
 
-  it("never saves a shot that keeps showing the wrong item; keeps the cut-out instead", async () => {
+  it("never saves a shot that keeps showing the wrong item; gives up after max_retries and keeps the cut-out", async () => {
     parse.mockResolvedValue(verdict(false));
     const { client, calls } = setup([{ ...SHIRT, name: "Wristwatch", category: "accessory" }]);
     await expect(makeOutfitLook(client as never, "o1")).resolves.toMatch(/^u1\/looks\//);
+    // 1 attempt + max_retries (2).
+    expect(edit).toHaveBeenCalledTimes(3);
+    expect(callsTo(calls, "wardrobe_items", "update")).toHaveLength(0);
+  });
+
+  it("retries when the background isn't really transparent", async () => {
+    const solid = (await opaque()).toString("base64");
+    const good = PIECE_PNG.toString("base64");
+    edit.mockResolvedValueOnce({ data: [{ b64_json: solid }] }).mockResolvedValue({ data: [{ b64_json: good }] });
+    const { client, calls } = setup([SHIRT]);
+    await makeOutfitLook(client as never, "o1");
+
     expect(edit).toHaveBeenCalledTimes(2);
+    // The opaque shot is rejected before the (paid) item check.
+    expect(parse).toHaveBeenCalledTimes(1);
+    expect(callsTo(calls, "wardrobe_items", "update")).toHaveLength(1);
+  });
+
+  it("never saves an opaque shot", async () => {
+    const solid = (await opaque()).toString("base64");
+    edit.mockResolvedValue({ data: [{ b64_json: solid }] });
+    const { client, calls } = setup([SHIRT]);
+    await makeOutfitLook(client as never, "o1");
+    expect(edit).toHaveBeenCalledTimes(3);
     expect(callsTo(calls, "wardrobe_items", "update")).toHaveLength(0);
   });
 
@@ -227,6 +263,31 @@ describe("shotMatches", () => {
     parse.mockResolvedValueOnce(verdict(true));
     await shotMatches(openai, await png(), { name: "Blazer", category: "outerwear" });
     expect(parse.mock.calls[0][0].messages[0].content[0].text).toMatch(/a pocket square in its pocket.*are part of it/);
+  });
+});
+
+describe("hasRealTransparency", () => {
+  it("accepts a garment on a transparent background", async () => {
+    expect(await hasRealTransparency(await png())).toBe(true);
+  });
+
+  it("rejects a painted backdrop, with or without an alpha channel", async () => {
+    expect(await hasRealTransparency(await opaque())).toBe(false);
+    const jpeg = await sharp({ create: { width: 40, height: 60, channels: 3, background: "#ffffff" } }).jpeg().toBuffer();
+    expect(await hasRealTransparency(jpeg)).toBe(false);
+  });
+});
+
+it("uses the configured image settings", () => {
+  expect(IMAGE_CONFIG).toMatchObject({
+    image_model: "gpt-image-2.5-flare",
+    quality: "high",
+    size: "1024x1024",
+    background: "transparent",
+    output_format: "png",
+    max_retries: 2,
+    verify_alpha_channel: true,
+    use_structured_outputs: true,
   });
 });
 

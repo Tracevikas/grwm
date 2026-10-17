@@ -3,6 +3,7 @@ import OpenAI, { toFile } from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
 import sharp from "sharp";
 import { z } from "zod";
+import { IMAGE_CONFIG } from "./image-config";
 import { PHOTO_BUCKET } from "./photos";
 import type { Category } from "./types";
 
@@ -131,30 +132,48 @@ async function download(supabase: SupabaseClient, path: string) {
   return data ? Buffer.from(await data.arrayBuffer()) : null;
 }
 
-/** Asks the image model to extract one piece from the photo; returns a tightly trimmed shot. */
+/**
+ * True when the image really has a see-through background: an alpha channel,
+ * transparent corners, and a meaningful share of transparent pixels. Catches
+ * shots where the model painted a white or grey backdrop despite the setting.
+ */
+export async function hasRealTransparency(image: Buffer) {
+  const { data, info } = await sharp(image).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const { width: w, height: h, channels } = info;
+  const alpha = (x: number, y: number) => data[(y * w + x) * channels + 3];
+  const clearCorners = [alpha(0, 0), alpha(w - 1, 0), alpha(0, h - 1), alpha(w - 1, h - 1)].filter((a) => a < 16).length;
+
+  let clear = 0;
+  for (let i = 3; i < data.length; i += channels) if (data[i] < 16) clear++;
+  return clearCorners >= 3 && clear / (w * h) >= 0.05;
+}
+
+/** Asks the image model to extract one piece from the photo. */
 async function generateShot(openai: OpenAI, photo: { data: Buffer; type: string }, piece: Piece, others: string[], strict: boolean) {
-  const tall = piece.category === "bottom" || piece.category === "dress" || piece.category === "outerwear";
   const result = await openai.images.edit({
-    model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-2.5-flare",
+    model: IMAGE_CONFIG.image_model,
     image: await toFile(photo.data, "outfit.jpg", { type: photo.type }),
     prompt: piecePrompt(piece, others, strict),
-    background: "transparent",
-    output_format: "png",
+    background: IMAGE_CONFIG.background,
+    output_format: IMAGE_CONFIG.output_format,
     // High quality keeps fabric, buttons and shades closest to the photo.
-    quality: "high",
-    size: tall ? "1024x1536" : "1024x1024",
+    quality: IMAGE_CONFIG.quality,
+    size: IMAGE_CONFIG.size,
   });
   const b64 = result.data?.[0]?.b64_json;
   if (!b64) throw new Error("no image returned");
-  // Trim the empty margin so every shot is framed tightly around the garment.
-  return sharp(Buffer.from(b64, "base64")).trim({ threshold: 1 }).webp({ quality: 90, alphaQuality: 95 }).toBuffer();
+  return Buffer.from(b64, "base64");
 }
+
+/** Trims the empty margin so every shot is framed tightly around the garment. */
+const finishShot = (raw: Buffer) => sharp(raw).trim({ threshold: 1 }).webp({ quality: 90, alphaQuality: 95 }).toBuffer();
 
 /**
  * Gets a verified product shot for one piece: reuses its existing one if it
- * still checks out, otherwise asks the image model (with one stricter retry)
- * and stores the result as the piece's image. A shot that shows the wrong
- * item is never saved; the piece keeps its segmentation cut-out instead.
+ * still checks out, otherwise asks the image model (up to max_retries more
+ * times, stricter after a wrong item) and stores the result as the piece's
+ * image. A shot that shows the wrong item or has no real transparency is
+ * never saved; the piece keeps its segmentation cut-out instead.
  */
 async function productShot(
   supabase: SupabaseClient,
@@ -174,13 +193,20 @@ async function productShot(
     }
 
     let shot: Buffer | null = null;
-    for (const strict of [false, true]) {
-      const attempt = await generateShot(openai, photo, piece, others, strict);
-      if (await shotMatches(openai, attempt, piece)) {
-        shot = attempt;
-        break;
+    let wrongItemSeen = false;
+    for (let attempt = 0; attempt <= IMAGE_CONFIG.max_retries && !shot; attempt++) {
+      const raw = await generateShot(openai, photo, piece, others, wrongItemSeen);
+      if (IMAGE_CONFIG.verify_alpha_channel && !(await hasRealTransparency(raw))) {
+        console.warn(`Product shot for ${piece.name}: background isn't transparent (attempt ${attempt + 1})`);
+        continue;
       }
-      console.warn(`Product shot for ${piece.name} showed the wrong item${strict ? " again" : ", retrying"}`);
+      const finished = await finishShot(raw);
+      if (await shotMatches(openai, finished, piece)) {
+        shot = finished;
+      } else {
+        wrongItemSeen = true;
+        console.warn(`Product shot for ${piece.name}: showed the wrong item (attempt ${attempt + 1})`);
+      }
     }
     if (!shot) {
       // An earlier product shot that no longer checks out must not keep showing.
