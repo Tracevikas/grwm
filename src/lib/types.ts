@@ -1,0 +1,57 @@
+export const CATEGORIES = [
+  "top",
+  "bottom",
+  "dress",
+  "outerwear",
+  "shoes",
+  "bag",
+  "accessory",
+  "other",
+] as const;
+export type Category = (typeof CATEGORIES)[number];
+
+export const CATEGORY_LABELS: Record<Category, string> = {
+  top: "Tops",
+  bottom: "Bottoms",
+  dress: "Dresses",
+  outerwear: "Outerwear",
+  shoes: "Shoes",
+  bag: "Bags",
+  accessory: "Accessories",
+  other: "Other",
+};
+
+/** Normalized bounding box, all values 0–1 relative to the photo. */
+export type Box = { x: number; y: number; w: number; h: number };
+
+export type Outfit = {
+  id: string;
+  worn_on: string;
+  photo_path: string;
+  photo_w: number;
+  photo_h: number;
+  notes: string | null;
+  status: "processing" | "done" | "failed";
+  error: string | null;
+  created_at: string;
+};
+
+export type WardrobeItem = {
+  id: string;
+  name: string;
+  category: Category;
+  subcategory: string | null;
+  colors: string[];
+  pattern: string | null;
+  material: string | null;
+  style: string | null;
+  seasons: string[];
+  description: string | null;
+  cover_outfit_id: string | null;
+  cover_box: Box | null;
+  /** Missing until supabase/migrations/002_cutouts.sql has run. */
+  cutout_path?: string | null;
+  created_at: string;
+  times_worn: number;
+  last_worn: string | null;
+};

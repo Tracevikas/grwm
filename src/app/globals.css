@@ -1,0 +1,107 @@
+@import "tailwindcss";
+
+/* Mocha & butter: oat, espresso, and a butter-yellow accent. */
+:root {
+  --background: #f5f0ea; /* oat */
+  --surface: #ffffff;
+  --surface-2: #ebe3d8;
+  --foreground: #2b1e17; /* espresso */
+  --muted: #7a6a5e;
+  --line: #e2d8cc;
+  --accent: #f2c14e; /* butter: fills only, always with espresso on top */
+  --accent-ink: #2b1e17;
+  --accent-strong: #94650f; /* butter deepened for text and focus rings on oat */
+  --danger: #b4432f;
+  --nav: #2b1e17;
+  --nav-ink: #f5ede3;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #1a1411;
+    --surface: #251d18;
+    --surface-2: #32281f;
+    --foreground: #f5ede3;
+    --muted: #a8998b;
+    --line: #3a2f27;
+    --accent: #f2c14e;
+    --accent-ink: #2b1e17;
+    --accent-strong: #f2c14e;
+    --danger: #f08a6e;
+    --nav: #f5ede3;
+    --nav-ink: #2b1e17;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-strong: var(--accent-strong);
+  --color-danger: var(--danger);
+  --color-nav: var(--nav);
+  --color-nav-ink: var(--nav-ink);
+  --font-sans: var(--font-geist-sans);
+  --font-display: var(--font-display);
+  --radius-mirror: 999px 999px 1.75rem 1.75rem;
+}
+
+:root {
+  /* Native controls (date picker, scrollbars) follow the theme. */
+  color-scheme: light dark;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  -webkit-tap-highlight-color: transparent;
+}
+
+:focus-visible {
+  outline: 2.5px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+
+/* The arched mirror: the app's one signature shape. */
+.mirror {
+  border-radius: var(--radius-mirror);
+  overflow: hidden;
+}
+
+.display {
+  font-family: var(--font-display);
+  font-variation-settings: "wdth" 85;
+  letter-spacing: -0.035em;
+  line-height: 0.92;
+}
+
+/* Scan line that sweeps the mirror while the AI reads the photo. */
+@keyframes scan {
+  0% { transform: translateY(-10%); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translateY(110%); opacity: 0; }
+}
+.scan-line {
+  animation: scan 1.8s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+}
+
+@keyframes rise {
+  from { transform: translateY(8px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+.rise {
+  animation: rise 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scan-line, .rise { animation: none; }
+}
+
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
