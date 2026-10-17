@@ -13,8 +13,14 @@ create table if not exists public.outfits (
   notes       text,
   status      text not null default 'processing' check (status in ('processing', 'done', 'failed')),
   error       text,
+  -- Background-free flat-lay of the look, made by the OpenAI image model.
+  look_path   text,
+  look_status text check (look_status in ('pending', 'done', 'failed')),
   created_at  timestamptz not null default now()
 );
+alter table public.outfits add column if not exists look_path text;
+alter table public.outfits add column if not exists look_status text
+  check (look_status in ('pending', 'done', 'failed'));
 create index if not exists outfits_user_worn_idx on public.outfits (user_id, worn_on desc);
 
 -- The digital wardrobe: each distinct garment, deduplicated across photos.

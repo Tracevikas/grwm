@@ -8,6 +8,16 @@ vi.mock("@/lib/process-outfit", async (orig) => ({
   processOutfit: (...a: unknown[]) => processOutfit(...a),
 }));
 
+const scheduled: (() => unknown)[] = [];
+vi.mock("next/server", async (orig) => ({
+  ...(await orig<typeof import("next/server")>()),
+  after: (fn: () => unknown) => scheduled.push(fn),
+}));
+const revalidatePath = vi.fn();
+vi.mock("next/cache", () => ({ revalidatePath: (...a: unknown[]) => revalidatePath(...a) }));
+const makeOutfitLook = vi.fn();
+vi.mock("@/lib/outfit-look", () => ({ makeOutfitLook: (...a: unknown[]) => makeOutfitLook(...a) }));
+
 import { POST } from "@/app/api/outfits/[id]/analyze/route";
 import { OutfitError } from "@/lib/process-outfit";
 
@@ -27,12 +37,28 @@ describe("POST /api/outfits/[id]/analyze", () => {
     expect(processOutfit).not.toHaveBeenCalled();
   });
 
-  it("returns the processing summary", async () => {
+  it("returns the processing summary, then draws the look after responding", async () => {
+    scheduled.length = 0;
     processOutfit.mockResolvedValue({ items: 3, created: 1, matched: 2 });
     const res = await call();
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ items: 3, created: 1, matched: 2 });
+    expect(await res.json()).toEqual({ items: 3, created: 1, matched: 2, look: "pending" });
     expect(processOutfit).toHaveBeenCalledWith("client", "o1");
+    expect(revalidatePath).toHaveBeenCalledWith("/", "layout");
+
+    // Not started before the response…
+    expect(makeOutfitLook).not.toHaveBeenCalled();
+    expect(scheduled).toHaveLength(1);
+    // …but scheduled to run once it has gone out.
+    scheduled[0]();
+    expect(makeOutfitLook).toHaveBeenCalledWith("client", "o1");
+  });
+
+  it("doesn't draw a look when the analysis failed", async () => {
+    scheduled.length = 0;
+    processOutfit.mockRejectedValue(new OutfitError("No outfit found", 422));
+    await call();
+    expect(scheduled).toHaveLength(0);
   });
 
   it("maps OutfitError to its status code", async () => {

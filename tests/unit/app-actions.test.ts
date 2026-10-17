@@ -12,7 +12,15 @@ vi.mock("next/navigation", () => ({
   },
 }));
 const revalidatePath = vi.fn();
-vi.mock("next/cache", () => ({ revalidatePath: (p: string) => revalidatePath(p) }));
+vi.mock("next/cache", () => ({ revalidatePath: (...a: unknown[]) => revalidatePath(...a) }));
+// after() needs a real request; run scheduled work straight away instead.
+const scheduled: (() => unknown)[] = [];
+vi.mock("next/server", async (orig) => ({
+  ...(await orig<typeof import("next/server")>()),
+  after: (fn: () => unknown) => scheduled.push(fn),
+}));
+const makeOutfitLook = vi.fn();
+vi.mock("@/lib/outfit-look", () => ({ makeOutfitLook: (...a: unknown[]) => makeOutfitLook(...a) }));
 
 let fake = fakeSupabase();
 let user: { id: string } | null = { id: "u1" };
@@ -51,7 +59,7 @@ describe("app server actions", () => {
       const [u] = callsTo(fake.calls, "wardrobe_items", "update");
       expect(u.payload).toEqual({ name: "Linen shirt", category: "top", colors: ["white", "beige"], description: null });
       expect(u.filters).toContainEqual(["eq", "id", "i1"]);
-      expect(revalidatePath).toHaveBeenCalledWith("/items/i1");
+      expect(revalidatePath).toHaveBeenCalledWith("/", "layout");
     });
 
     it("rejects unknown categories and empty names", async () => {
@@ -136,7 +144,7 @@ describe("app server actions", () => {
       const [, userId, , [target]] = saveCutouts.mock.calls[0];
       expect(userId).toBe("u1");
       expect(target).toMatchObject({ id: "i1", category: "top", previousPath: "u1/cutouts/i1-old.png", box: ITEM.cover_box });
-      expect(revalidatePath).toHaveBeenCalledWith("/items/i1");
+      expect(revalidatePath).toHaveBeenCalledWith("/", "layout");
     });
 
     it("explains when the model can't find the piece", async () => {
@@ -169,10 +177,14 @@ describe("app server actions", () => {
     expect(fake.storage.remove).not.toHaveBeenCalled();
   });
 
-  it("reanalyzeOutfit swallows failures (they are stored on the outfit) and refreshes the page", async () => {
+  it("reanalyzeOutfit swallows failures, refreshes every page and redraws the look", async () => {
     processOutfit.mockRejectedValue(new Error("model down"));
     await expect(reanalyzeOutfit("o1")).resolves.toBeUndefined();
     expect(processOutfit).toHaveBeenCalledWith(fake.client, "o1");
-    expect(revalidatePath).toHaveBeenCalledWith("/outfits/o1");
+    expect(revalidatePath).toHaveBeenCalledWith("/", "layout");
+    // The ChatGPT look is redrawn after responding.
+    expect(scheduled).toHaveLength(1);
+    scheduled.pop()!();
+    expect(makeOutfitLook).toHaveBeenCalledWith(fake.client, "o1");
   });
 });

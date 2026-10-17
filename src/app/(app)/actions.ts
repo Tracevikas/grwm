@@ -2,6 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
+import { deleteOutfitAndOrphans } from "@/lib/delete-outfit";
+import { makeOutfitLook } from "@/lib/outfit-look";
 import { PHOTO_BUCKET } from "@/lib/photos";
 import { processOutfit } from "@/lib/process-outfit";
 import { saveCutouts } from "@/lib/save-cutouts";
@@ -53,24 +56,27 @@ export async function makeCutout(itemId: string): Promise<CutoutState> {
   ]).catch(() => 0);
 
   if (!saved) return { error: "Couldn't find this piece clearly enough to cut it out. The crop stays as it is." };
-  revalidatePath(`/items/${itemId}`);
+  refreshEverything();
   return { done: true };
+}
+
+/** Wardrobe, diary, item and outfit pages all derive from the same rows. */
+function refreshEverything() {
+  revalidatePath("/", "layout");
 }
 
 export async function reanalyzeOutfit(outfitId: string) {
   const supabase = await requireUser();
   // Failures are recorded on the outfit row and shown on its page.
   await processOutfit(supabase, outfitId).catch(() => null);
-  revalidatePath(`/outfits/${outfitId}`);
+  after(() => makeOutfitLook(supabase, outfitId));
+  refreshEverything();
 }
 
 export async function deleteOutfit(outfitId: string) {
   const supabase = await requireUser();
-  const { data: outfit } = await supabase.from("outfits").select("photo_path").eq("id", outfitId).single();
-  if (outfit) {
-    await supabase.from("outfits").delete().eq("id", outfitId);
-    await supabase.storage.from(PHOTO_BUCKET).remove([outfit.photo_path]);
-  }
+  await deleteOutfitAndOrphans(supabase, outfitId);
+  refreshEverything();
   redirect("/outfits");
 }
 
@@ -92,7 +98,7 @@ export async function updateItem(itemId: string, formData: FormData) {
       description: String(formData.get("description") ?? "").trim() || null,
     })
     .eq("id", itemId);
-  revalidatePath(`/items/${itemId}`);
+  refreshEverything();
 }
 
 export async function deleteItem(itemId: string) {
@@ -100,6 +106,7 @@ export async function deleteItem(itemId: string) {
   const cutout = await cutoutPathOf(supabase, itemId);
   await supabase.from("wardrobe_items").delete().eq("id", itemId);
   if (cutout) await supabase.storage.from(PHOTO_BUCKET).remove([cutout]);
+  refreshEverything();
   redirect("/");
 }
 
@@ -118,5 +125,5 @@ export async function mergeItem(keepId: string, formData: FormData) {
   const cutout = await cutoutPathOf(supabase, dropId);
   await supabase.from("wardrobe_items").delete().eq("id", dropId);
   if (cutout) await supabase.storage.from(PHOTO_BUCKET).remove([cutout]);
-  revalidatePath(`/items/${keepId}`);
+  refreshEverything();
 }

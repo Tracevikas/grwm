@@ -2,7 +2,9 @@
 
 import { useSearchParams } from "next/navigation";
 import { Suspense, useActionState, useEffect, useState } from "react";
+import { useFormStatus } from "react-dom";
 import { InstallPrompt } from "@/components/InstallPrompt";
+import { Spinner } from "@/components/Spinner";
 import { Wordmark } from "@/components/Wordmark";
 import { sendCode, signInWithGoogle, verifyCode, type AuthState } from "./actions";
 
@@ -22,8 +24,9 @@ export default function LoginPage() {
         <div className="mirror relative mx-auto aspect-[3/4] w-[70%] bg-accent">
           <div className="absolute inset-0 bg-[radial-gradient(120%_70%_at_30%_15%,rgba(255,255,255,0.35),transparent_55%)]" />
           <div className="absolute left-[18%] top-[14%] h-[22%] w-[10%] -rotate-12 rounded-full bg-white/40 blur-[2px]" />
+          <div className="sheen absolute -inset-y-1/4 left-0 w-1/3 bg-gradient-to-r from-transparent via-white/50 to-transparent" aria-hidden />
         </div>
-        <h1 className="display absolute inset-x-0 bottom-[8%] text-center text-[3.3rem] font-extrabold text-accent-ink">
+        <h1 className="display rise absolute inset-x-0 bottom-[8%] text-center text-[3.3rem] font-extrabold text-accent-ink">
           get ready
           <br />
           with me
@@ -116,8 +119,9 @@ function SignIn({ linkError }: { linkError: string | null }) {
             )}
             <button
               disabled={sending}
-              className="h-14 w-full rounded-full bg-foreground text-base font-semibold text-background transition active:scale-[0.99] disabled:opacity-60"
+              className="flex h-14 w-full items-center justify-center gap-2 rounded-full bg-foreground text-base font-semibold text-background transition active:scale-[0.99] disabled:opacity-70"
             >
+              {sending && <Spinner />}
               {sending ? "Sending link…" : "Email me a sign-in link"}
             </button>
           </form>
@@ -207,8 +211,9 @@ function LinkSent({ email, send, sending, sendError, verify, verifying, verifyEr
           )}
           <button
             disabled={verifying}
-            className="h-12 w-full rounded-full bg-foreground font-semibold text-background transition active:scale-[0.99] disabled:opacity-60"
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground font-semibold text-background transition active:scale-[0.99] disabled:opacity-70"
           >
+            {verifying && <Spinner />}
             {verifying ? "Checking…" : "Sign in with code"}
           </button>
         </form>
@@ -218,8 +223,27 @@ function LinkSent({ email, send, sending, sendError, verify, verifying, verifyEr
 }
 
 function GoogleButton() {
+  const { pending } = useFormStatus();
   return (
-    <button className="flex h-14 w-full items-center justify-center gap-3 rounded-full bg-surface text-base font-semibold ring-1 ring-line transition active:scale-[0.99]">
+    <button
+      disabled={pending}
+      className="flex h-14 w-full items-center justify-center gap-3 rounded-full bg-surface text-base font-semibold ring-1 ring-line transition active:scale-[0.99] disabled:opacity-80"
+    >
+      {pending ? (
+        <>
+          <Spinner className="h-5 w-5" />
+          Opening Google…
+        </>
+      ) : (
+        <GoogleLabel />
+      )}
+    </button>
+  );
+}
+
+function GoogleLabel() {
+  return (
+    <>
       <svg viewBox="0 0 48 48" className="h-5 w-5" aria-hidden>
         <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z" />
         <path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z" />
@@ -227,6 +251,6 @@ function GoogleButton() {
         <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z" />
       </svg>
       Continue with Google
-    </button>
+    </>
   );
 }

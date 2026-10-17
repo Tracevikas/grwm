@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { PageShell } from "@/components/PageShell";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { SORTS, WardrobeView, type SortKey } from "@/components/WardrobeView";
 import { spectrum } from "@/lib/colors";
@@ -14,13 +14,11 @@ const ORDER: Record<SortKey, { column: string; ascending: boolean }> = {
   new: { column: "created_at", ascending: false },
 };
 
-// Each page owns its Suspense boundary: on client navigation within (app),
-// the layout-level loading.tsx sits above what re-renders and can't show.
 export default function WardrobePage(props: PageProps<"/">) {
   return (
-    <Suspense fallback={<PageSkeleton />}>
+    <PageShell fallback={<PageSkeleton />}>
       <Wardrobe {...props} />
-    </Suspense>
+    </PageShell>
   );
 }
 

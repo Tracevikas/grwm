@@ -1,10 +1,13 @@
 import Link from "next/link";
+import { ViewTransition } from "react";
 import type { SpectrumBand } from "@/lib/colors";
 import type { ItemWithPhoto } from "@/lib/queries";
 import { CATEGORIES, CATEGORY_LABELS, type Category } from "@/lib/types";
+import { CountUp } from "./CountUp";
 import { InstallPrompt } from "./InstallPrompt";
 import { ItemCard } from "./ItemCard";
 import { Spectrum } from "./Spectrum";
+import { SubmitButton } from "./SubmitButton";
 import { Wordmark } from "./Wordmark";
 
 export const SORTS = {
@@ -48,16 +51,18 @@ export function WardrobeView({ total, items, bands, filters, signOut }: Props) {
         <Wordmark className="text-lg" />
         {signOut && (
           <form action={signOut}>
-            <button className="rounded-full px-3 py-1.5 text-sm text-muted hover:bg-surface hover:text-foreground">Sign out</button>
+            <SubmitButton pendingLabel="Signing out…" className="rounded-full px-3 py-1.5 text-sm text-muted hover:bg-surface hover:text-foreground">
+              Sign out
+            </SubmitButton>
           </form>
         )}
       </div>
 
       <InstallPrompt />
 
-      <h1 className="display text-[5.5rem] font-bold">
-        {total}{" "}
-        <span className=" align-baseline text-[2rem] font-semibold tracking-tight text-muted">
+      <h1 className="display rise text-[5.5rem] font-bold">
+        <CountUp value={total} />{" "}
+        <span className="align-baseline text-[2rem] font-semibold tracking-tight text-muted">
           {total === 1 ? "piece" : "pieces"}
         </span>
       </h1>
@@ -110,11 +115,14 @@ export function WardrobeView({ total, items, bands, filters, signOut }: Props) {
           </div>
 
           {items.length > 0 ? (
-            <div className="grid grid-cols-2 gap-x-3 gap-y-6 sm:grid-cols-3">
-              {items.map((item) => (
-                <ItemCard key={item.id} item={item} />
-              ))}
-            </div>
+            // Changing a filter crossfades the grid (same place, different content).
+            <ViewTransition key={`${filters.category}|${filters.color}|${filters.sort}|${filters.q}`} enter="tab-fade" exit="tab-fade" default="none">
+              <div className="stagger grid grid-cols-2 gap-x-3 gap-y-6 sm:grid-cols-3">
+                {items.map((item, i) => (
+                  <ItemCard key={item.id} item={item} index={i} />
+                ))}
+              </div>
+            </ViewTransition>
           ) : (
             <p className="py-12 text-center text-muted">
               Nothing matches that yet.{" "}

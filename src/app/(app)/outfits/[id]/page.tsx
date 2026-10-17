@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Suspense } from "react";
+import { PageShell } from "@/components/PageShell";
 import { BackLink } from "@/components/BackLink";
 import { GarmentImage } from "@/components/GarmentImage";
+import { OutfitViewer } from "@/components/OutfitViewer";
 import { PageSkeleton } from "@/components/PageSkeleton";
+import { SubmitButton } from "@/components/SubmitButton";
 import { swatch } from "@/lib/colors";
 import { dateParts, signPhotos } from "@/lib/photos";
 import { cutoutPaths } from "@/lib/queries";
@@ -12,15 +14,15 @@ import { CATEGORY_LABELS, type Box, type Outfit, type WardrobeItem } from "@/lib
 import { deleteOutfit, reanalyzeOutfit } from "../../actions";
 
 // "Re-scan" runs the vision model inside a server action on this page.
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 type Link_ = { box: Box | null; wardrobe_items: Pick<WardrobeItem, "id" | "name" | "category" | "colors"> };
 
 export default function OutfitPage(props: PageProps<"/outfits/[id]">) {
   return (
-    <Suspense fallback={<PageSkeleton />}>
+    <PageShell fallback={<PageSkeleton />}>
       <OutfitDetail {...props} />
-    </Suspense>
+    </PageShell>
   );
 }
 
@@ -37,7 +39,7 @@ async function OutfitDetail(props: PageProps<"/outfits/[id]">) {
 
   const o = outfit as Outfit & { outfit_items: Link_[] };
   const cutouts = await cutoutPaths(supabase, o.outfit_items.map((l) => l.wardrobe_items.id));
-  const urls = await signPhotos(supabase, [o.photo_path, ...Object.values(cutouts)]);
+  const urls = await signPhotos(supabase, [o.photo_path, ...Object.values(cutouts), ...(o.look_path ? [o.look_path] : [])]);
   const url = urls[o.photo_path];
   const { day, weekday, month } = dateParts(o.worn_on);
 
@@ -54,10 +56,11 @@ async function OutfitDetail(props: PageProps<"/outfits/[id]">) {
       </header>
       {o.notes && <p className="text-lg">{o.notes}</p>}
 
-      <div className="mirror bg-surface-2">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={url} alt="Outfit photo" className="w-full" />
-      </div>
+      <OutfitViewer
+        photoUrl={url}
+        lookUrl={o.look_path ? urls[o.look_path] : undefined}
+        lookStatus={o.look_status}
+      />
 
       {o.status === "failed" && (
         <div className="rounded-2xl bg-accent/25 p-4 text-sm">
@@ -101,10 +104,14 @@ async function OutfitDetail(props: PageProps<"/outfits/[id]">) {
 
       <div className="grid grid-cols-2 gap-2">
         <form action={reanalyzeOutfit.bind(null, o.id)}>
-          <button className="h-12 w-full rounded-full bg-surface text-sm font-semibold">Re-scan photo</button>
+          <SubmitButton pendingLabel="Re-scanning…" className="h-12 w-full rounded-full bg-surface text-sm font-semibold">
+            Re-scan photo
+          </SubmitButton>
         </form>
         <form action={deleteOutfit.bind(null, o.id)}>
-          <button className="h-12 w-full rounded-full text-sm font-semibold text-danger ring-1 ring-danger/40">Delete outfit</button>
+          <SubmitButton pendingLabel="Deleting…" className="h-12 w-full rounded-full text-sm font-semibold text-danger ring-1 ring-danger/40">
+            Delete outfit
+          </SubmitButton>
         </form>
       </div>
     </div>

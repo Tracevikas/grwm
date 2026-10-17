@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Suspense } from "react";
+import { ViewTransition } from "react";
+import { PageShell } from "@/components/PageShell";
 import { BackLink } from "@/components/BackLink";
 import { CutoutButton } from "@/components/CutoutButton";
 import { GarmentImage } from "@/components/GarmentImage";
 import { PageSkeleton } from "@/components/PageSkeleton";
+import { SubmitButton } from "@/components/SubmitButton";
 import { WornAgo } from "@/components/WornAgo";
 import { swatch } from "@/lib/colors";
 import { dateParts, signPhotos } from "@/lib/photos";
@@ -20,9 +22,9 @@ type Appearance = { box: Box | null; outfits: Outfit };
 
 export default function ItemPage(props: PageProps<"/items/[id]">) {
   return (
-    <Suspense fallback={<PageSkeleton />}>
+    <PageShell fallback={<PageSkeleton />}>
       <ItemDetail {...props} />
-    </Suspense>
+    </PageShell>
   );
 }
 
@@ -59,16 +61,19 @@ async function ItemDetail(props: PageProps<"/items/[id]">) {
       <BackLink href="/">Wardrobe</BackLink>
 
       <div className="space-y-3">
-        <GarmentImage
-          cutoutUrl={item.cutoutUrl}
-          photoUrl={item.photo?.url}
-          box={item.cover_box}
-          photoW={item.photo?.w ?? 1}
-          photoH={item.photo?.h ?? 1}
-          alt={item.name}
-          aspect="aspect-[4/5]"
-          className="mirror mx-auto w-4/5"
-        />
+        {/* Matches the card's name in the wardrobe grid, so the image morphs into place. */}
+        <ViewTransition name={`item-${item.id}`} share="morph" default="none">
+          <GarmentImage
+            cutoutUrl={item.cutoutUrl}
+            photoUrl={item.photo?.url}
+            box={item.cover_box}
+            photoW={item.photo?.w ?? 1}
+            photoH={item.photo?.h ?? 1}
+            alt={item.name}
+            aspect="aspect-[4/5]"
+            className="mirror mx-auto w-4/5"
+          />
+        </ViewTransition>
         {item.photo && item.cover_box && (
           <CutoutButton action={makeCutout.bind(null, item.id)} hasCutout={Boolean(item.cutoutUrl)} />
         )}
@@ -163,7 +168,9 @@ async function ItemDetail(props: PageProps<"/items/[id]">) {
               Notes
               <textarea name="description" defaultValue={item.description ?? ""} rows={3} className={`${field} mt-1 h-auto py-3 text-foreground`} />
             </label>
-            <button className="h-12 w-full rounded-full bg-foreground font-semibold text-background">Save changes</button>
+            <SubmitButton pendingLabel="Saving…" className="h-12 w-full rounded-full bg-foreground font-semibold text-background">
+              Save changes
+            </SubmitButton>
           </form>
         </details>
 
@@ -180,14 +187,18 @@ async function ItemDetail(props: PageProps<"/items/[id]">) {
                   <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
               </select>
-              <button className="h-12 w-full rounded-full bg-foreground font-semibold text-background">Merge into this piece</button>
+              <SubmitButton pendingLabel="Merging…" className="h-12 w-full rounded-full bg-foreground font-semibold text-background">
+                Merge into this piece
+              </SubmitButton>
             </form>
           </details>
         )}
       </div>
 
       <form action={deleteItem.bind(null, item.id)} className="text-center">
-        <button className="rounded-full px-4 py-2 text-sm font-medium text-danger hover:bg-danger/10">Remove from wardrobe</button>
+        <SubmitButton pendingLabel="Removing…" className="rounded-full px-4 py-2 text-sm font-medium text-danger hover:bg-danger/10">
+          Remove from wardrobe
+        </SubmitButton>
       </form>
     </div>
   );

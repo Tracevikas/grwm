@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { PageShell } from "@/components/PageShell";
 import { DiaryView } from "@/components/DiaryView";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { signPhotos } from "@/lib/photos";
@@ -9,9 +9,9 @@ type Row = Outfit & { outfit_items: { count: number }[] };
 
 export default function OutfitsPage() {
   return (
-    <Suspense fallback={<PageSkeleton />}>
+    <PageShell fallback={<PageSkeleton />}>
       <Outfits />
-    </Suspense>
+    </PageShell>
   );
 }
 
@@ -25,7 +25,7 @@ async function Outfits() {
     .limit(120);
 
   const rows = (data ?? []) as Row[];
-  const urls = await signPhotos(supabase, rows.map((o) => o.photo_path));
+  const urls = await signPhotos(supabase, rows.flatMap((o) => (o.look_path ? [o.photo_path, o.look_path] : [o.photo_path])));
 
   return (
     <DiaryView
@@ -33,6 +33,7 @@ async function Outfits() {
         ...o,
         pieces: outfit_items[0]?.count ?? 0,
         url: urls[o.photo_path],
+        lookUrl: o.look_path ? urls[o.look_path] : undefined,
       }))}
     />
   );

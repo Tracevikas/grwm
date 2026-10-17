@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState, useSyncExternalStore } from "react";
+import { LinkPendingDot } from "@/components/LinkPending";
+import { DirectionalPage } from "@/components/PageShell";
+import { Spinner } from "@/components/Spinner";
 import { PHOTO_BUCKET } from "@/lib/photos";
 import { createClient } from "@/lib/supabase/client";
 
@@ -116,177 +119,206 @@ export default function LogOutfitPage() {
   const field = "h-12 w-full rounded-xl bg-surface px-3.5 text-foreground outline-none focus:ring-2 focus:ring-accent-strong";
 
   return (
-    <div className="space-y-6">
-      <h1 className="display text-[3.4rem] font-bold">What are you wearing?</h1>
+    <DirectionalPage>
+      <div className="space-y-6">
+        <h1 className="display rise text-[3.4rem] font-bold">What are you wearing?</h1>
 
-      <input
-        ref={cameraRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        aria-label="Take a photo"
-        onChange={(e) => {
-          choose(e.target.files?.[0]);
-          e.target.value = "";
-        }}
-      />
-      <input
-        ref={galleryRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        aria-label="Choose a photo from your gallery"
-        onChange={(e) => {
-          choose(e.target.files?.[0]);
-          e.target.value = "";
-        }}
-      />
+        <input
+          ref={cameraRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          aria-label="Take a photo"
+          onChange={(e) => {
+            choose(e.target.files?.[0]);
+            e.target.value = "";
+          }}
+        />
+        <input
+          ref={galleryRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          aria-label="Choose a photo from your gallery"
+          onChange={(e) => {
+            choose(e.target.files?.[0]);
+            e.target.value = "";
+          }}
+        />
 
-      <button
-        type="button"
-        onClick={() => galleryRef.current?.click()}
-        disabled={working}
-        aria-label={preview ? "Change photo" : "Choose a photo"}
-        className={`mirror relative mx-auto flex aspect-[3/4] w-[74%] items-center justify-center ${
-          preview ? "bg-surface-2" : "border-2 border-dashed border-line bg-surface/70"
-        }`}
-      >
-        {preview ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={preview} alt="Outfit preview" className="h-full w-full object-cover" />
-        ) : (
-          <span className="flex flex-col items-center gap-3 px-8 text-center">
-            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-accent text-accent-ink">
-              <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinejoin="round" aria-hidden>
+        <button
+          type="button"
+          onClick={() => galleryRef.current?.click()}
+          disabled={working}
+          aria-label={preview ? "Change photo" : "Choose a photo"}
+          className={`mirror relative mx-auto flex aspect-[3/4] w-[74%] items-center justify-center ${
+            preview ? "bg-surface-2" : "border-2 border-dashed border-line bg-surface/70"
+          }`}
+        >
+          {preview ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={preview} alt="Outfit preview" className="h-full w-full object-cover" />
+          ) : (
+            <span className="flex flex-col items-center gap-3 px-8 text-center">
+              <span className="flex h-16 w-16 items-center justify-center rounded-full bg-accent text-accent-ink">
+                <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinejoin="round" aria-hidden>
+                  <path d="M4 8.5h3l1.8-2.5h6.4L17 8.5h3V19H4z" />
+                  <circle cx="12" cy="13.3" r="3.3" />
+                </svg>
+              </span>
+              <span className="text-lg font-semibold">Add a mirror photo</span>
+              <span className="text-sm text-muted">Head to toe, in good light. We&apos;ll find every piece.</span>
+            </span>
+          )}
+
+          {working && (
+            <span className="absolute inset-0 bg-[#2b1e17]/40" aria-live="polite">
+              <span className="scan-line absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-transparent via-accent/50 to-transparent">
+                <span className="absolute inset-x-0 top-1/2 h-0.5 bg-accent shadow-[0_0_16px_2px_var(--accent)]" />
+              </span>
+              <span className="absolute inset-x-0 bottom-6 text-center text-sm font-semibold text-white">{phase.label}</span>
+            </span>
+          )}
+
+        </button>
+
+        {!working && phase.step !== "done" && (
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => cameraRef.current?.click()}
+              className="flex h-12 items-center justify-center gap-2 rounded-full bg-surface font-semibold transition active:scale-[0.98]"
+            >
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinejoin="round" aria-hidden>
                 <path d="M4 8.5h3l1.8-2.5h6.4L17 8.5h3V19H4z" />
                 <circle cx="12" cy="13.3" r="3.3" />
               </svg>
-            </span>
-            <span className="text-lg font-semibold">Add a mirror photo</span>
-            <span className="text-sm text-muted">Head to toe, in good light. We&apos;ll find every piece.</span>
-          </span>
-        )}
-
-        {working && (
-          <span className="absolute inset-0 bg-[#2b1e17]/40" aria-live="polite">
-            <span className="scan-line absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-transparent via-accent/50 to-transparent">
-              <span className="absolute inset-x-0 top-1/2 h-0.5 bg-accent shadow-[0_0_16px_2px_var(--accent)]" />
-            </span>
-            <span className="absolute inset-x-0 bottom-6 text-center text-sm font-semibold text-white">{phase.label}</span>
-          </span>
-        )}
-
-      </button>
-
-      {!working && phase.step !== "done" && (
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => cameraRef.current?.click()}
-            className="flex h-12 items-center justify-center gap-2 rounded-full bg-surface font-semibold transition active:scale-[0.98]"
-          >
-            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinejoin="round" aria-hidden>
-              <path d="M4 8.5h3l1.8-2.5h6.4L17 8.5h3V19H4z" />
-              <circle cx="12" cy="13.3" r="3.3" />
-            </svg>
-            {preview ? "Retake" : "Take photo"}
-          </button>
-          <button
-            type="button"
-            onClick={() => galleryRef.current?.click()}
-            className="flex h-12 items-center justify-center gap-2 rounded-full bg-surface font-semibold transition active:scale-[0.98]"
-          >
-            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
-              <circle cx="9" cy="10" r="1.6" />
-              <path d="m20.5 16-4.5-4.5L7 19.5" />
-            </svg>
-            {preview ? "Choose another" : "From gallery"}
-          </button>
-        </div>
-      )}
-
-      {phase.step !== "done" && (
-        <>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="text-sm text-muted">
-              Worn on
-              <input
-                type="date"
-                value={date}
-                max={todayDate || undefined}
-                onChange={(e) => setDate(e.target.value)}
-                className={`${field} mt-1`}
-              />
-            </label>
-            <label className="text-sm text-muted">
-              Note
-              <input
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Office, wedding…"
-                className={`${field} mt-1 placeholder:text-muted/70`}
-              />
-            </label>
-          </div>
-
-          {phase.step === "error" && (
-            <div className="rounded-2xl bg-danger/10 p-4 text-sm" role="alert">
-              <p className="font-semibold">{phase.message}</p>
-              {phase.outfitId && (
-                <button onClick={() => analyze(phase.outfitId!)} className="mt-2 font-semibold text-danger underline underline-offset-2">
-                  Try again
-                </button>
-              )}
-            </div>
-          )}
-
-          <button
-            onClick={submit}
-            disabled={!file || working || (phase.step === "error" && !!phase.outfitId)}
-            className="h-14 w-full rounded-full bg-accent text-base font-semibold text-accent-ink transition active:scale-[0.99] disabled:bg-surface-2 disabled:text-muted"
-          >
-            {working ? "Reading your outfit…" : "Save to my wardrobe"}
-          </button>
-        </>
-      )}
-
-      {phase.step === "done" && (
-        <div className="rise space-y-5 rounded-[1.75rem] bg-surface p-6" role="status">
-          <div className="flex items-end gap-3">
-            <span className="display text-7xl font-bold text-accent-strong">{phase.items}</span>
-            <span className="pb-1.5 text-xl font-semibold leading-tight">
-              {phase.items === 1 ? "piece" : "pieces"}
-              <br />
-              saved
-            </span>
-          </div>
-          <p className="text-muted">
-            {phase.created} new to your wardrobe, {phase.matched} you&apos;ve worn before.
-            {phase.cutouts ? ` ${phase.cutouts} cut out from the background.` : ""}
-          </p>
-          <div className="grid grid-cols-2 gap-2">
-            <Link
-              href={`/outfits/${phase.outfitId}`}
-              className="flex h-12 items-center justify-center rounded-full bg-accent font-semibold text-accent-ink"
-            >
-              Review outfit
-            </Link>
+              {preview ? "Retake" : "Take photo"}
+            </button>
             <button
-              onClick={() => {
-                setFile(null);
-                setPreview(null);
-                setNotes("");
-                setPhase({ step: "pick" });
-              }}
-              className="h-12 rounded-full bg-background font-semibold"
+              type="button"
+              onClick={() => galleryRef.current?.click()}
+              className="flex h-12 items-center justify-center gap-2 rounded-full bg-surface font-semibold transition active:scale-[0.98]"
             >
-              Log another
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
+                <circle cx="9" cy="10" r="1.6" />
+                <path d="m20.5 16-4.5-4.5L7 19.5" />
+              </svg>
+              {preview ? "Choose another" : "From gallery"}
             </button>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+
+        {phase.step !== "done" && (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="text-sm text-muted">
+                Worn on
+                <input
+                  type="date"
+                  value={date}
+                  max={todayDate || undefined}
+                  onChange={(e) => setDate(e.target.value)}
+                  className={`${field} mt-1`}
+                />
+              </label>
+              <label className="text-sm text-muted">
+                Note
+                <input
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Office, wedding…"
+                  className={`${field} mt-1 placeholder:text-muted/70`}
+                />
+              </label>
+            </div>
+
+            {phase.step === "error" && (
+              <div className="rounded-2xl bg-danger/10 p-4 text-sm" role="alert">
+                <p className="font-semibold">{phase.message}</p>
+                {phase.outfitId && (
+                  <button onClick={() => analyze(phase.outfitId!)} className="mt-2 font-semibold text-danger underline underline-offset-2">
+                    Try again
+                  </button>
+                )}
+              </div>
+            )}
+
+            <button
+              onClick={submit}
+              disabled={!file || working || (phase.step === "error" && !!phase.outfitId)}
+              className="flex h-14 w-full items-center justify-center gap-2 rounded-full bg-accent text-base font-semibold text-accent-ink transition active:scale-[0.99] disabled:bg-surface-2 disabled:text-muted"
+            >
+              {working && <Spinner className="h-5 w-5" />}
+              {working ? "Reading your outfit…" : "Save to my wardrobe"}
+            </button>
+          </>
+        )}
+
+        {phase.step === "done" && (
+          <div className="rise space-y-5 rounded-[1.75rem] bg-surface p-6" role="status">
+            <div className="flex items-end gap-3">
+              <span className="relative">
+                <span className="display pop inline-block text-7xl font-bold text-accent-strong">{phase.items}</span>
+                <Burst />
+              </span>
+              <span className="rise pb-1.5 text-xl font-semibold leading-tight [animation-delay:0.2s]">
+                {phase.items === 1 ? "piece" : "pieces"}
+                <br />
+                saved
+              </span>
+            </div>
+            <p className="text-muted">
+              {phase.created} new to your wardrobe, {phase.matched} you&apos;ve worn before.
+              {phase.cutouts ? ` ${phase.cutouts} cut out from the background.` : ""}
+            </p>
+            <p className="text-sm text-muted">ChatGPT is now drawing a clean picture of the whole look. It appears on the outfit in about half a minute.</p>
+            <div className="grid grid-cols-2 gap-2">
+              <Link
+                href={`/outfits/${phase.outfitId}`}
+                transitionTypes={["nav-forward"]}
+                className="relative flex h-12 items-center justify-center gap-2 rounded-full bg-accent font-semibold text-accent-ink transition active:scale-[0.98]"
+              >
+                Review outfit
+                <LinkPendingDot />
+              </Link>
+              <button
+                onClick={() => {
+                  setFile(null);
+                  setPreview(null);
+                  setNotes("");
+                  setPhase({ step: "pick" });
+                }}
+                className="h-12 rounded-full bg-background font-semibold"
+              >
+                Log another
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </DirectionalPage>
+  );
+}
+
+/** Butter and espresso dots bursting out of the saved-pieces count. */
+function Burst() {
+  const dots = Array.from({ length: 10 }, (_, i) => {
+    const angle = (i / 10) * Math.PI * 2;
+    const r = 46 + (i % 3) * 10;
+    return { dx: Math.cos(angle) * r, dy: Math.sin(angle) * r, big: i % 2 === 0 };
+  });
+  return (
+    <span className="burst pointer-events-none absolute left-1/2 top-1/2" aria-hidden>
+      {dots.map((d, i) => (
+        <span
+          key={i}
+          className={`absolute rounded-full ${d.big ? "h-2.5 w-2.5 bg-accent" : "h-1.5 w-1.5 bg-foreground"}`}
+          style={{ "--dx": `${d.dx}px`, "--dy": `${d.dy}px` } as React.CSSProperties}
+        />
+      ))}
+    </span>
   );
 }

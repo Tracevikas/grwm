@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Suspense } from "react";
+import { LinkPendingDot } from "./LinkPending";
 
 const tabs = [
   {
@@ -27,7 +28,10 @@ function isActive(href: string, pathname: string | null) {
 
 function Nav({ pathname }: { pathname: string | null }) {
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-20 flex justify-center px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+    <nav
+      className="fixed inset-x-0 bottom-0 z-20 flex justify-center px-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
+      style={{ viewTransitionName: "bottom-nav" }}
+    >
       <ul className="flex items-center gap-1 rounded-full bg-nav p-1.5 text-nav-ink shadow-[0_12px_32px_-12px_rgba(43,30,23,0.55)]">
         {tabs.map((tab) => {
           const active = isActive(tab.href, pathname);
@@ -35,12 +39,13 @@ function Nav({ pathname }: { pathname: string | null }) {
             <li key={tab.href}>
               <Link
                 href={tab.href}
+                transitionTypes={["nav-tab"]}
                 aria-label={tab.label}
                 aria-current={active ? "page" : undefined}
                 className={
                   tab.primary
-                    ? "mx-1 flex h-12 w-12 items-center justify-center rounded-full bg-accent text-accent-ink transition active:scale-95"
-                    : `flex h-12 items-center gap-2 rounded-full px-4 text-sm font-medium transition ${
+                    ? "mx-1 flex h-12 w-12 items-center justify-center rounded-full bg-accent text-accent-ink transition active:scale-90"
+                    : `flex h-12 items-center gap-2 rounded-full px-4 text-sm font-medium transition-all duration-300 active:scale-95 ${
                         active ? "bg-nav-ink text-nav" : "opacity-70 hover:opacity-100"
                       }`
                 }
@@ -48,7 +53,8 @@ function Nav({ pathname }: { pathname: string | null }) {
                 <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" strokeWidth={tab.primary ? 2.6 : 1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                   <path d={tab.icon} />
                 </svg>
-                {!tab.primary && active && <span>{tab.label}</span>}
+                {!tab.primary && active && <span className="rise">{tab.label}</span>}
+                {!tab.primary && <LinkPendingDot />}
               </Link>
             </li>
           );

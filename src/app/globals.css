@@ -99,8 +99,182 @@ body {
   animation: rise 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
+/* Grids ripple in: each child sets --i (its index). */
+.stagger > * {
+  animation: rise 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: calc(min(var(--i, 0), 12) * 45ms);
+}
+
+/* Colour spectrum bands grow up from the baseline, left to right. */
+@keyframes grow-up {
+  from { transform: scaleY(0.15); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+.grow-up {
+  transform-origin: bottom;
+  animation: grow-up 0.6s cubic-bezier(0.2, 0.9, 0.25, 1.15) both;
+  animation-delay: calc(var(--i, 0) * 40ms);
+}
+
+/* Skeleton shimmer sweeping across placeholders. */
+@keyframes shimmer {
+  from { background-position: 150% 0; }
+  to { background-position: -50% 0; }
+}
+.skeleton {
+  background: linear-gradient(100deg, var(--surface-2) 30%, color-mix(in oklab, var(--surface-2), var(--surface) 70%) 50%, var(--surface-2) 70%) 0 0 / 200% 100%;
+  animation: shimmer 1.3s linear infinite;
+}
+.shimmer {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.9), transparent) 0 0 / 50% 100% no-repeat, rgba(255, 255, 255, 0.25);
+  animation: shimmer 1.2s ease-in-out infinite;
+}
+.shimmer-badge {
+  animation: pulse-soft 1.6s ease-in-out infinite;
+}
+@keyframes pulse-soft {
+  50% { opacity: 0.55; }
+}
+
+/* Spinner for buttons and links that are waiting on the server. */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.spin {
+  animation: spin 0.7s linear infinite;
+}
+
+/* Swapping between the outfit photo and its clean look. */
+@keyframes view-in {
+  from { opacity: 0; transform: scale(0.97); filter: blur(4px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+.view-in {
+  animation: view-in 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* "Pieces saved": the number pops and confetti-dots burst outward. */
+@keyframes pop {
+  0% { transform: scale(0.4); opacity: 0; }
+  60% { transform: scale(1.12); opacity: 1; }
+  100% { transform: none; }
+}
+.pop {
+  animation: pop 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
+}
+@keyframes burst {
+  0% { transform: translate(0, 0) scale(0.4); opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy)) scale(1); opacity: 0; }
+}
+.burst > span {
+  animation: burst 0.9s cubic-bezier(0.1, 0.7, 0.3, 1) both;
+  animation-delay: 0.15s;
+}
+
+/* Login: a sheen glides across the mirror once. */
+@keyframes sheen {
+  from { transform: translateX(-120%) rotate(18deg); }
+  to { transform: translateX(260%) rotate(18deg); }
+}
+.sheen {
+  animation: sheen 1.6s cubic-bezier(0.4, 0, 0.2, 1) 0.4s both;
+}
+
+/* ── Page transitions (React <ViewTransition>) ─────────────────────── */
+
+:root {
+  --duration-exit: 150ms;
+  --duration-enter: 220ms;
+  --duration-move: 420ms;
+}
+
+@keyframes vt-fade {
+  from { opacity: 0; filter: blur(3px); }
+  to { opacity: 1; filter: none; }
+}
+@keyframes vt-slide-y {
+  from { transform: translateY(12px); }
+  to { transform: none; }
+}
+@keyframes vt-slide-x {
+  from { transform: translateX(var(--slide-offset)); }
+  to { transform: none; }
+}
+@keyframes vt-scale {
+  from { transform: scale(0.985); }
+  to { transform: none; }
+}
+
+/* Skeleton hands over to real content. */
+::view-transition-old(.slide-down) {
+  animation: var(--duration-exit) ease-out both vt-fade reverse, var(--duration-exit) ease-out both vt-slide-y reverse;
+}
+::view-transition-new(.slide-up) {
+  animation: var(--duration-enter) ease-in var(--duration-exit) both vt-fade, var(--duration-move) cubic-bezier(0.2, 0.8, 0.2, 1) both vt-slide-y;
+}
+
+/* Deeper into the app slides left; back slides right. */
+::view-transition-old(.nav-forward) {
+  --slide-offset: -48px;
+  animation: var(--duration-exit) ease-in both vt-fade reverse, var(--duration-move) ease-in-out both vt-slide-x reverse;
+}
+::view-transition-new(.nav-forward) {
+  --slide-offset: 48px;
+  animation: var(--duration-enter) ease-out var(--duration-exit) both vt-fade, var(--duration-move) ease-in-out both vt-slide-x;
+}
+::view-transition-old(.nav-back) {
+  --slide-offset: 48px;
+  animation: var(--duration-exit) ease-in both vt-fade reverse, var(--duration-move) ease-in-out both vt-slide-x reverse;
+}
+::view-transition-new(.nav-back) {
+  --slide-offset: -48px;
+  animation: var(--duration-enter) ease-out var(--duration-exit) both vt-fade, var(--duration-move) ease-in-out both vt-slide-x;
+}
+
+/* Switching bottom tabs: same level, so a soft crossfade. */
+::view-transition-old(.tab-fade) {
+  animation: var(--duration-exit) ease-in both vt-fade reverse;
+}
+::view-transition-new(.tab-fade) {
+  animation: var(--duration-enter) ease-out var(--duration-exit) both vt-fade, var(--duration-move) ease-out both vt-scale;
+}
+
+/* A piece or outfit morphs from its card into its detail page. */
+::view-transition-group(.morph) {
+  animation-duration: 420ms;
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* The bottom bar stays put while pages move beneath it. */
+::view-transition-group(bottom-nav) {
+  animation: none;
+  z-index: 100;
+}
+::view-transition-old(bottom-nav) {
+  display: none;
+}
+::view-transition-new(bottom-nav) {
+  animation: none;
+}
+
+/* Taps during a transition reach the live page. */
+::view-transition {
+  pointer-events: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .scan-line, .rise { animation: none; }
+  .scan-line, .rise, .stagger > *, .grow-up, .skeleton, .shimmer, .shimmer-badge, .view-in, .pop, .burst > span, .sheen {
+    animation: none;
+  }
+  .spin {
+    animation-duration: 1.6s;
+  }
+  ::view-transition-old(*),
+  ::view-transition-new(*),
+  ::view-transition-group(*) {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+  }
 }
 
 .no-scrollbar { scrollbar-width: none; }

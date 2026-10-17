@@ -39,6 +39,16 @@ After the vision model lists the pieces, a clothing segmentation model ([segform
 - **First run** downloads the model (about 30 MB) and caches it; after that each photo takes a few seconds on the server, and it costs nothing.
 - **Hosting:** it needs a Node server (not the edge runtime) with enough memory for the model; on serverless hosts, check the function size limit.
 
+## Clean outfit looks (ChatGPT)
+
+After a photo is analysed, the API responds straight away and then (via `after()`) asks the OpenAI image model (`OPENAI_IMAGE_MODEL`, default `gpt-image-2.5-flare`) for a background-free flat-lay of the whole outfit: no person, no background, every detected piece laid out true to the photo. It is stored as `outfits/<user-id>/looks/<outfit-id>-*.webp` and shown in the Diary and on the outfit page (with a switch back to the photo); the outfit page refreshes itself until it arrives. Re-scan redraws it.
+
+- **Existing database:** run [`supabase/migrations/003_outfit_looks.sql`](supabase/migrations/003_outfit_looks.sql) once. Until then logging works as before, just without looks.
+- **Cost:** one image edit per logged photo (a few cents at medium quality).
+- **Time:** about 20–40 seconds; the analyze route's `maxDuration` is 300 to leave room.
+
+Deleting an outfit also removes pieces that appeared only in it (with their cut-outs and the look); pieces worn elsewhere stay and take a cover photo from another outfit.
+
 ## Tests
 
 ```bash

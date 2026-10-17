@@ -33,6 +33,9 @@ export type Outfit = {
   notes: string | null;
   status: "processing" | "done" | "failed";
   error: string | null;
+  /** Background-free flat-lay from the OpenAI image model (after migration 003). */
+  look_path?: string | null;
+  look_status?: "pending" | "done" | "failed" | null;
   created_at: string;
 };
 

@@ -14,7 +14,7 @@ export function Spectrum({ bands, selected, hrefFor }: Props) {
   return (
     <div>
       <div className="flex h-14 gap-[3px] overflow-hidden rounded-2xl" role="list" aria-label="Wardrobe by colour">
-        {bands.map((band) => {
+        {bands.map((band, i) => {
           const isSelected = selected === band.color;
           return (
             <Link
@@ -23,8 +23,8 @@ export function Spectrum({ bands, selected, hrefFor }: Props) {
               href={hrefFor(isSelected ? null : band.color)}
               aria-label={`${band.color}, ${band.count} ${band.count === 1 ? "piece" : "pieces"}`}
               aria-current={isSelected ? "true" : undefined}
-              style={{ flexGrow: band.count, background: band.swatch }}
-              className={`min-w-3 basis-0 shadow-[inset_0_0_0_1px_rgba(43,30,23,0.08)] transition-[flex-grow,opacity] duration-300 ${
+              style={{ flexGrow: band.count, background: band.swatch, "--i": i } as React.CSSProperties}
+              className={`grow-up min-w-3 basis-0 shadow-[inset_0_0_0_1px_rgba(43,30,23,0.08)] transition-[flex-grow,opacity,filter] duration-300 hover:brightness-110 active:brightness-95 ${
                 selected && !isSelected ? "opacity-25" : ""
               }`}
             />
