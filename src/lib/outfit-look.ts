@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import OpenAI, { toFile } from "openai";
+import { zodResponseFormat } from "openai/helpers/zod";
 import sharp from "sharp";
+import { z } from "zod";
 import { PHOTO_BUCKET } from "./photos";
 import type { Category } from "./types";
 
@@ -16,15 +18,51 @@ type Piece = {
 /** Product shots made by the image model live here; segmentation cut-outs live in /cutouts/. */
 export const isProductShot = (path: string | null | undefined) => Boolean(path?.includes("/products/"));
 
-export function piecePrompt(piece: Pick<Piece, "name" | "category" | "description">) {
+const SMALL: Category[] = ["accessory", "shoes", "bag"];
+
+export function piecePrompt(piece: Pick<Piece, "name" | "category" | "description">, others: string[] = [], strict = false) {
+  const small = SMALL.includes(piece.category);
   return `Extract ONLY this one item from the photo and show it as a clean catalogue product photo:
 
 ${piece.name} (${piece.category})${piece.description ? `: ${piece.description}` : ""}
-
+${others.length ? `\nThe photo also shows ${others.join(", ")}. Do NOT show any of those.\n` : ""}
 Rules:
-- Show just this single item, complete and front-facing, laid flat or on an invisible mannequin. If an arm, another garment or the photo edge hides part of it, complete that same item naturally.
-- Copy it exactly from the photo: the same colour and shade, fabric texture, pattern, collar, lapels, buttons, pockets and stitching. Anything attached to it stays on it (e.g. a pocket square stays in the blazer pocket).
-- Nothing else at all: no other garments or accessories, no person, skin, face, hair or hands, no hanger, no background, no shadow, no text.`;
+- Show just this single item, complete and front-facing${small ? ", large and centred so it fills the frame" : ", laid flat or on an invisible mannequin"}. If an arm, another garment or the photo edge hides part of it, complete that same item naturally.
+- Copy it exactly from the photo: the same colour and shade, material, pattern, shape, buttons, pockets and stitching. Anything attached to it stays on it (e.g. a pocket square stays in the blazer pocket).
+- Nothing else at all: no other garments or accessories, no person, skin, face, hair or hands, no hanger, no background, no shadow, no text.${
+    strict ? `\n- IMPORTANT: a previous attempt showed the wrong item. The image must contain only the ${piece.name}.` : ""
+  }`;
+}
+
+const Verdict = z.object({
+  what_it_shows: z.string().describe("Briefly, what the image shows"),
+  shows_requested_item: z.boolean().describe("The image clearly shows the requested item"),
+  shows_other_items: z
+    .boolean()
+    .describe("The image also shows a SEPARATE garment or accessory, a person or body parts. Details attached to the item itself don't count"),
+});
+
+/** Cheap vision check that a product shot really is the requested piece, alone. */
+export async function shotMatches(openai: OpenAI, shot: Buffer, piece: Pick<Piece, "name" | "category">) {
+  const small = await sharp(shot).resize({ width: 512, height: 512, fit: "inside" }).png().toBuffer();
+  const res = await openai.chat.completions.parse({
+    model: process.env.OPENAI_MODEL || "gpt-5-mini",
+    messages: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: `Does this product image show a ${piece.name} (${piece.category}), and no other separate item? Things attached to it (a pocket square in its pocket, buttons, a lining, a strap or buckle) are part of it.`,
+          },
+          { type: "image_url", image_url: { url: `data:image/png;base64,${small.toString("base64")}`, detail: "low" } },
+        ],
+      },
+    ],
+    response_format: zodResponseFormat(Verdict, "shot_check"),
+  });
+  const v = res.choices[0]?.message?.parsed;
+  return Boolean(v && v.shows_requested_item && !v.shows_other_items);
 }
 
 /** Pieces in the order a catalogue lays out a look. */
@@ -93,10 +131,30 @@ async function download(supabase: SupabaseClient, path: string) {
   return data ? Buffer.from(await data.arrayBuffer()) : null;
 }
 
+/** Asks the image model to extract one piece from the photo; returns a tightly trimmed shot. */
+async function generateShot(openai: OpenAI, photo: { data: Buffer; type: string }, piece: Piece, others: string[], strict: boolean) {
+  const tall = piece.category === "bottom" || piece.category === "dress" || piece.category === "outerwear";
+  const result = await openai.images.edit({
+    model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-2.5-flare",
+    image: await toFile(photo.data, "outfit.jpg", { type: photo.type }),
+    prompt: piecePrompt(piece, others, strict),
+    background: "transparent",
+    output_format: "png",
+    // High quality keeps fabric, buttons and shades closest to the photo.
+    quality: "high",
+    size: tall ? "1024x1536" : "1024x1024",
+  });
+  const b64 = result.data?.[0]?.b64_json;
+  if (!b64) throw new Error("no image returned");
+  // Trim the empty margin so every shot is framed tightly around the garment.
+  return sharp(Buffer.from(b64, "base64")).trim({ threshold: 1 }).webp({ quality: 90, alphaQuality: 95 }).toBuffer();
+}
+
 /**
- * Gets a product shot for one piece: reuses its existing one, or asks the image
- * model to extract it from the photo and stores it as the piece's image.
- * Falls back to the segmentation cut-out if generation fails.
+ * Gets a verified product shot for one piece: reuses its existing one if it
+ * still checks out, otherwise asks the image model (with one stricter retry)
+ * and stores the result as the piece's image. A shot that shows the wrong
+ * item is never saved; the piece keeps its segmentation cut-out instead.
  */
 async function productShot(
   supabase: SupabaseClient,
@@ -104,29 +162,34 @@ async function productShot(
   userId: string,
   photo: { data: Buffer; type: string },
   piece: Piece,
+  others: string[],
 ): Promise<Buffer | null> {
-  if (isProductShot(piece.cutout_path)) {
-    const existing = await download(supabase, piece.cutout_path!);
-    if (existing) return existing;
-  }
+  const fallback = async () =>
+    piece.cutout_path && !isProductShot(piece.cutout_path) ? download(supabase, piece.cutout_path) : null;
 
   try {
-    const tall = piece.category === "bottom" || piece.category === "dress" || piece.category === "outerwear";
-    const result = await openai.images.edit({
-      model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-2.5-flare",
-      image: await toFile(photo.data, "outfit.jpg", { type: photo.type }),
-      prompt: piecePrompt(piece),
-      background: "transparent",
-      output_format: "png",
-      // High quality keeps fabric, buttons and shades closest to the photo.
-      quality: "high",
-      size: tall ? "1024x1536" : "1024x1024",
-    });
-    const b64 = result.data?.[0]?.b64_json;
-    if (!b64) throw new Error("no image returned");
+    if (isProductShot(piece.cutout_path)) {
+      const existing = await download(supabase, piece.cutout_path!);
+      if (existing && (await shotMatches(openai, existing, piece))) return existing;
+    }
 
-    // Trim the empty margin so every shot is framed tightly around the garment.
-    const shot = await sharp(Buffer.from(b64, "base64")).trim({ threshold: 1 }).webp({ quality: 90, alphaQuality: 95 }).toBuffer();
+    let shot: Buffer | null = null;
+    for (const strict of [false, true]) {
+      const attempt = await generateShot(openai, photo, piece, others, strict);
+      if (await shotMatches(openai, attempt, piece)) {
+        shot = attempt;
+        break;
+      }
+      console.warn(`Product shot for ${piece.name} showed the wrong item${strict ? " again" : ", retrying"}`);
+    }
+    if (!shot) {
+      // An earlier product shot that no longer checks out must not keep showing.
+      if (isProductShot(piece.cutout_path)) {
+        await supabase.from("wardrobe_items").update({ cutout_path: null }).eq("id", piece.id);
+        await supabase.storage.from(PHOTO_BUCKET).remove([piece.cutout_path!]);
+      }
+      return fallback();
+    }
 
     const path = `${userId}/products/${piece.id}-${crypto.randomUUID().slice(0, 8)}.webp`;
     const { error: uploadError } = await supabase.storage.from(PHOTO_BUCKET).upload(path, shot, { contentType: "image/webp" });
@@ -138,7 +201,7 @@ async function productShot(
     return shot;
   } catch (err) {
     console.warn(`Product shot failed for ${piece.name}:`, err instanceof Error ? err.message : err);
-    return piece.cutout_path ? download(supabase, piece.cutout_path) : null;
+    return fallback();
   }
 }
 
@@ -175,7 +238,8 @@ export async function makeOutfitLook(supabase: SupabaseClient, outfitId: string)
     const photo = { data: Buffer.from(await file.arrayBuffer()), type: file.type || "image/jpeg" };
 
     const openai = new OpenAI({ maxRetries: 4 });
-    const shots = (await mapLimit(pieces, 3, (p) => productShot(supabase, openai, outfit.user_id, photo, p))).filter(
+    const others = (p: Piece) => pieces.filter((o) => o !== p).map((o) => `a ${o.name}`);
+    const shots = (await mapLimit(pieces, 3, (p) => productShot(supabase, openai, outfit.user_id, photo, p, others(p)))).filter(
       (s): s is Buffer => Boolean(s),
     );
     if (shots.length === 0) throw new Error("No piece could be drawn");

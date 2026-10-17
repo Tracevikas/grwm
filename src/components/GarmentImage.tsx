@@ -21,13 +21,15 @@ export function GarmentImage({ cutoutUrl, photoUrl, box, photoW, photoH, alt, cl
     return <CropImage src={photoUrl} box={box} photoW={photoW} photoH={photoH} alt={alt} className={className} aspect={aspect} bg={bg} />;
   }
   return (
-    <div className={`relative flex ${aspect} items-center justify-center overflow-hidden p-[9%] ${bg} ${className}`}>
+    <div className={`relative flex ${aspect} items-center justify-center overflow-hidden ${bg} ${className}`}>
+      {/* Sized as a share of this box, not with % padding: percentage padding is
+          measured against the parent's width, which shrank row thumbnails to dots. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={cutoutUrl}
         alt={alt}
         loading="lazy"
-        className="max-h-full max-w-full object-contain drop-shadow-[0_10px_14px_rgba(43,30,23,0.18)]"
+        className="h-[84%] w-[84%] object-contain drop-shadow-[0_10px_14px_rgba(43,30,23,0.18)]"
       />
     </div>
   );
