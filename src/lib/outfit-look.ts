@@ -2,41 +2,44 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import OpenAI, { toFile } from "openai";
 import { PHOTO_BUCKET } from "./photos";
 
-type Piece = { name: string; category: string };
+type Piece = { name: string; category: string; description?: string | null };
 
 export function lookPrompt(pieces: Piece[]) {
-  const list = pieces.map((p) => `- ${p.name} (${p.category})`).join("\n");
-  return `Create a clean fashion flat-lay of exactly the outfit this person is wearing, as if each piece were laid out for a catalogue.
+  const n = pieces.length;
+  const list = pieces.map((p, i) => `${i + 1}. ${p.name} (${p.category})${p.description ? `: ${p.description}` : ""}`).join("\n");
+  return `Make a clean product flat-lay of the clothing in this photo, as a catalogue would show it.
 
-Pieces to include:
+Show EXACTLY these ${n} ${n === 1 ? "piece" : "pieces"} and nothing else:
 ${list}
 
 Rules:
+- Draw only the ${n} ${n === 1 ? "piece" : "pieces"} listed. Do not add any garment or accessory that is not listed: no trousers, skirts, shoes, belts, ties, bags, watches or pocket squares unless they are in the list above.
+- The photo may be cropped (for example waist up). Never invent the parts of the outfit that are out of frame.
+- Copy each piece exactly from the photo: same colour and shade, fabric texture, pattern, collar, lapels, buttons, pockets and anything attached to it (e.g. a pocket square stays in the blazer pocket, not as a separate item).
 - Remove the person completely: no body, skin, face, hair or hands.
 - Remove the background completely; nothing behind the clothes.
-- Keep each piece true to the photo: same colours, pattern, fabric, logos, buttons and fit. Do not invent or restyle anything.
-- Arrange them like an outfit, front-facing: top or dress at the top, bottoms below, shoes at the bottom, bag and accessories to the side.
-- No mannequin, no text, no props.`;
+- Lay the pieces out neatly side by side, front-facing, evenly lit. No mannequin, no text, no props.`;
 }
 
 /**
- * Asks the OpenAI image model for a background-free flat-lay of the outfit,
- * stores it next to the photo and records it on the outfit. Never throws:
- * the outfit is already saved, and failures just leave the photo showing.
+ * Asks the OpenAI image model for a background-free flat-lay of exactly the
+ * outfit's pieces, stores it next to the photo and records it on the outfit.
+ * Returns the stored path, or null if it couldn't be made (never throws: the
+ * outfit is already saved, and the photo still shows).
  */
-export async function makeOutfitLook(supabase: SupabaseClient, outfitId: string): Promise<boolean> {
+export async function makeOutfitLook(supabase: SupabaseClient, outfitId: string): Promise<string | null> {
   const { data: outfit } = await supabase
     .from("outfits")
-    .select("id, user_id, photo_path, outfit_items(wardrobe_items(name, category))")
+    .select("id, user_id, photo_path, outfit_items(wardrobe_items(name, category, description))")
     .eq("id", outfitId)
     .single();
-  if (!outfit) return false;
+  if (!outfit) return null;
 
   // Also confirms the look columns exist (supabase/migrations/003_outfit_looks.sql).
   const { error: markError } = await supabase.from("outfits").update({ look_status: "pending" }).eq("id", outfitId);
   if (markError) {
     console.warn("Outfit look skipped. Run supabase/migrations/003_outfit_looks.sql:", markError.message);
-    return false;
+    return null;
   }
 
   try {
@@ -54,7 +57,8 @@ export async function makeOutfitLook(supabase: SupabaseClient, outfitId: string)
       prompt: lookPrompt(pieces),
       background: "transparent",
       output_format: "webp",
-      quality: "medium",
+      // High quality keeps fabric, buttons and shades closer to the photo.
+      quality: "high",
       size: "1024x1536",
     });
     const b64 = result.data?.[0]?.b64_json;
@@ -71,10 +75,10 @@ export async function makeOutfitLook(supabase: SupabaseClient, outfitId: string)
     if (previous?.look_path && previous.look_path !== path) {
       await supabase.storage.from(PHOTO_BUCKET).remove([previous.look_path]);
     }
-    return true;
+    return path;
   } catch (err) {
     console.warn(`Outfit look failed for ${outfitId}:`, err instanceof Error ? err.message : err);
     await supabase.from("outfits").update({ look_status: "failed" }).eq("id", outfitId);
-    return false;
+    return null;
   }
 }

@@ -54,6 +54,8 @@ Strict rules:
 - Never infer or assume items. If the feet are out of frame, list no shoes. If a bag, belt or watch isn't visible, don't list one.
 - The wardrobe list below is ONLY for recognising items you can see. Never add an item because it is in the wardrobe list.
 - One entry per physical item. Don't split one garment into several (e.g. a dress is not a top plus a skirt; a suit jacket is one item). A mirror shows the same outfit once: don't count reflections twice.
+- Things tucked into or attached to a garment are part of that garment, not separate items: a pocket square in a blazer pocket, a lapel pin, a brooch, a collar bar. Mention them in that garment's description instead.
+- If the photo is cropped (e.g. waist up), list only what is in frame. A blazer in a waist-up photo does not mean there are trousers.
 - Ignore other people, clothes on hangers, beds or chairs, and anything in the background.
 - Layered pieces count only if part of them is actually visible (e.g. a shirt collar under a sweater).
 - confidence is how sure you are the item is really there; use below 0.5 when you're unsure.

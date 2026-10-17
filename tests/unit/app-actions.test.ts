@@ -13,12 +13,6 @@ vi.mock("next/navigation", () => ({
 }));
 const revalidatePath = vi.fn();
 vi.mock("next/cache", () => ({ revalidatePath: (...a: unknown[]) => revalidatePath(...a) }));
-// after() needs a real request; run scheduled work straight away instead.
-const scheduled: (() => unknown)[] = [];
-vi.mock("next/server", async (orig) => ({
-  ...(await orig<typeof import("next/server")>()),
-  after: (fn: () => unknown) => scheduled.push(fn),
-}));
 const makeOutfitLook = vi.fn();
 vi.mock("@/lib/outfit-look", () => ({ makeOutfitLook: (...a: unknown[]) => makeOutfitLook(...a) }));
 
@@ -182,9 +176,7 @@ describe("app server actions", () => {
     await expect(reanalyzeOutfit("o1")).resolves.toBeUndefined();
     expect(processOutfit).toHaveBeenCalledWith(fake.client, "o1");
     expect(revalidatePath).toHaveBeenCalledWith("/", "layout");
-    // The ChatGPT look is redrawn after responding.
-    expect(scheduled).toHaveLength(1);
-    scheduled.pop()!();
+    // The clean look is redrawn as part of the re-scan.
     expect(makeOutfitLook).toHaveBeenCalledWith(fake.client, "o1");
   });
 });

@@ -1,11 +1,10 @@
 import { revalidatePath } from "next/cache";
-import { after, NextResponse } from "next/server";
-import { makeOutfitLook } from "@/lib/outfit-look";
+import { NextResponse } from "next/server";
 import { OutfitError, processOutfit } from "@/lib/process-outfit";
 import { getUser } from "@/lib/supabase/server";
 
-// Vision analysis, then (after responding) the ChatGPT outfit image.
-export const maxDuration = 300;
+// Vision analysis plus cut-outs.
+export const maxDuration = 120;
 
 export async function POST(_req: Request, ctx: RouteContext<"/api/outfits/[id]/analyze">) {
   const { id } = await ctx.params;
@@ -15,9 +14,7 @@ export async function POST(_req: Request, ctx: RouteContext<"/api/outfits/[id]/a
   try {
     const result = await processOutfit(supabase, id);
     revalidatePath("/", "layout");
-    // The pieces are saved; draw the background-free look without making the user wait.
-    after(() => makeOutfitLook(supabase, id));
-    return NextResponse.json({ ...result, look: "pending" });
+    return NextResponse.json(result);
   } catch (err) {
     const status = err instanceof OutfitError ? err.status : 500;
     const message = err instanceof Error ? err.message : "Analysis failed";

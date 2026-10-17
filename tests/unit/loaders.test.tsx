@@ -39,10 +39,11 @@ describe("OutfitViewer", () => {
     expect(screen.getByRole("tab", { name: "Photo" })).toHaveAttribute("aria-selected", "true");
   });
 
-  it("says ChatGPT is working and keeps checking until the look arrives", () => {
+  it("quietly shows the photo while a look is still being finished, checking until it arrives", () => {
     vi.useFakeTimers();
     render(<OutfitViewer photoUrl="https://x/photo.jpg" lookUrl={undefined} lookStatus="pending" />);
-    expect(screen.getByRole("status")).toHaveTextContent("ChatGPT is laying out your look");
+    expect(screen.getByAltText("Outfit photo")).toHaveAttribute("src", "https://x/photo.jpg");
+    expect(screen.queryByText(/ChatGPT/)).not.toBeInTheDocument();
     expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
 
     vi.advanceTimersByTime(4000 * 3);
@@ -52,6 +53,6 @@ describe("OutfitViewer", () => {
 
   it("explains a failed look", () => {
     render(<OutfitViewer photoUrl="https://x/photo.jpg" lookUrl={undefined} lookStatus="failed" />);
-    expect(screen.getByText(/couldn.t draw this look/)).toBeInTheDocument();
+    expect(screen.getByText(/clean picture couldn.t be drawn/)).toBeInTheDocument();
   });
 });

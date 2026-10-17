@@ -13,8 +13,9 @@ const POLL_MS = 4000;
 const GIVE_UP_AFTER = 45; // polls, about three minutes
 
 /**
- * The outfit in the arched mirror: the clean ChatGPT look when it's ready
- * (with a switch back to the photo), or the photo while it's being made.
+ * The outfit in the arched mirror: the clean look (with a switch back to the
+ * photo). If the look is still being finished, it quietly shows the photo and
+ * swaps the look in when it's ready.
  */
 export function OutfitViewer({ photoUrl, lookUrl, lookStatus }: Props) {
   const router = useRouter();
@@ -44,13 +45,6 @@ export function OutfitViewer({ photoUrl, lookUrl, lookStatus }: Props) {
           alt={showLook ? "Your outfit, laid out on its own" : "Outfit photo"}
           className={`view-in h-full w-full ${showLook ? "object-contain p-[8%] drop-shadow-[0_18px_22px_rgba(43,30,23,0.2)]" : "object-cover"}`}
         />
-        {pending && (
-          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-5 pt-16 text-white" role="status">
-            <div className="shimmer mx-auto mb-3 h-1 w-24 overflow-hidden rounded-full bg-white/25" />
-            <p className="text-center text-sm font-semibold">ChatGPT is laying out your look…</p>
-            <p className="text-center text-xs text-white/75">Takes about half a minute. You can leave this page.</p>
-          </div>
-        )}
       </div>
 
       {lookUrl && (
@@ -70,7 +64,7 @@ export function OutfitViewer({ photoUrl, lookUrl, lookStatus }: Props) {
         </div>
       )}
       {lookStatus === "failed" && !lookUrl && (
-        <p className="text-center text-sm text-muted">ChatGPT couldn&apos;t draw this look. Re-scan the photo to try again.</p>
+        <p className="text-center text-sm text-muted">The clean picture couldn&apos;t be drawn. Re-scan the photo to try again.</p>
       )}
     </div>
   );

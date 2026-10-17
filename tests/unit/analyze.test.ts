@@ -139,6 +139,9 @@ describe("analyzeOutfitPhoto", () => {
     expect(system).toMatch(/List ONLY the garments/);
     expect(system).toMatch(/Never add an item because it is in the wardrobe list/);
     expect(system).toMatch(/If the feet are out of frame, list no shoes/);
+    // The waist-up blazer case: pocket square belongs to the blazer, no assumed trousers.
+    expect(system).toMatch(/a pocket square in a blazer pocket/);
+    expect(system).toMatch(/A blazer in a waist-up photo does not mean there are trousers/);
     const props = parse.mock.calls[0][0].response_format.json_schema.schema.properties.items.items.properties;
     expect(Object.keys(props)).toEqual(expect.arrayContaining(["visible_evidence", "confidence", "match_confidence"]));
   });

@@ -12,7 +12,16 @@ import { createClient } from "@/lib/supabase/client";
 type Phase =
   | { step: "pick" }
   | { step: "working"; label: string }
-  | { step: "done"; outfitId: string; items: number; created: number; matched: number; cutouts?: number }
+  | {
+      step: "done";
+      outfitId: string;
+      items: number;
+      created: number;
+      matched: number;
+      cutouts?: number;
+      /** The clean, background-free picture of the look, when it could be drawn. */
+      lookUrl?: string;
+    }
   | { step: "error"; message: string; outfitId?: string };
 
 const MAX_SIDE = 1600;
@@ -71,14 +80,21 @@ export default function LogOutfitPage() {
   }
 
   async function analyze(outfitId: string) {
-    setPhase({ step: "working", label: "Finding and cutting out every piece…" });
+    setPhase({ step: "working", label: "Finding every piece…" });
     const res = await fetch(`/api/outfits/${outfitId}/analyze`, { method: "POST" });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
       setPhase({ step: "error", message: body.error ?? "Analysis failed", outfitId });
       return;
     }
-    setPhase({ step: "done", outfitId, ...body });
+
+    // Part of saving: the result screen shows the finished clean look.
+    setPhase({ step: "working", label: "Drawing a clean picture of your look…" });
+    const look: { lookUrl?: string } = await fetch(`/api/outfits/${outfitId}/look`, { method: "POST" })
+      .then((r) => (r.ok ? r.json() : {}))
+      .catch(() => ({}));
+
+    setPhase({ step: "done", outfitId, ...body, lookUrl: look.lookUrl });
     router.refresh();
   }
 
@@ -156,7 +172,15 @@ export default function LogOutfitPage() {
             preview ? "bg-surface-2" : "border-2 border-dashed border-line bg-surface/70"
           }`}
         >
-          {preview ? (
+          {phase.step === "done" && phase.lookUrl ? (
+            // The finished clean look replaces the photo in the mirror.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={phase.lookUrl}
+              alt="Your outfit, laid out on its own"
+              className="view-in h-full w-full bg-surface object-contain p-[8%] drop-shadow-[0_18px_22px_rgba(43,30,23,0.2)]"
+            />
+          ) : preview ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={preview} alt="Outfit preview" className="h-full w-full object-cover" />
           ) : (
@@ -274,7 +298,9 @@ export default function LogOutfitPage() {
               {phase.created} new to your wardrobe, {phase.matched} you&apos;ve worn before.
               {phase.cutouts ? ` ${phase.cutouts} cut out from the background.` : ""}
             </p>
-            <p className="text-sm text-muted">ChatGPT is now drawing a clean picture of the whole look. It appears on the outfit in about half a minute.</p>
+            {!phase.lookUrl && (
+              <p className="text-sm text-muted">The clean picture couldn&apos;t be drawn this time. Re-scan the outfit to try again.</p>
+            )}
             <div className="grid grid-cols-2 gap-2">
               <Link
                 href={`/outfits/${phase.outfitId}`}

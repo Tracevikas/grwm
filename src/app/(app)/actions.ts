@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { after } from "next/server";
 import { deleteOutfitAndOrphans } from "@/lib/delete-outfit";
 import { makeOutfitLook } from "@/lib/outfit-look";
 import { PHOTO_BUCKET } from "@/lib/photos";
@@ -69,7 +68,8 @@ export async function reanalyzeOutfit(outfitId: string) {
   const supabase = await requireUser();
   // Failures are recorded on the outfit row and shown on its page.
   await processOutfit(supabase, outfitId).catch(() => null);
-  after(() => makeOutfitLook(supabase, outfitId));
+  // Redraw the clean look now, so it is ready when the page refreshes.
+  await makeOutfitLook(supabase, outfitId);
   refreshEverything();
 }
 

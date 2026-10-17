@@ -90,11 +90,6 @@ function DiaryTile({ outfit: o, index }: { outfit: DiaryEntry; index: number }) 
             {o.status === "processing" ? "Reading photo…" : "Needs a re-scan"}
           </span>
         )}
-        {o.status === "done" && o.look_status === "pending" && !o.lookUrl && (
-          <span className="shimmer-badge absolute left-1/2 top-[22%] -translate-x-1/2 whitespace-nowrap rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-[#2b1e17]">
-            Drawing clean look…
-          </span>
-        )}
       </div>
       {o.notes && <p className="mt-1.5 line-clamp-1 px-1 text-sm text-muted">{o.notes}</p>}
     </Link>
