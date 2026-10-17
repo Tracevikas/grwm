@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { analyzeOutfitPhoto, normalizeBox, type KnownItem } from "./analyze";
+import { analyzeOutfitPhoto, keepVisibleItems, normalizeBox, type KnownItem } from "./analyze";
 import { PHOTO_BUCKET } from "./photos";
 import { saveCutouts, type CutoutTarget } from "./save-cutouts";
 import type { Category } from "./types";
@@ -36,8 +36,10 @@ export async function processOutfit(supabase: SupabaseClient, outfitId: string) 
     const photo = Buffer.from(await file.arrayBuffer());
     const base64 = photo.toString("base64");
     const analysis = await analyzeOutfitPhoto({ base64, mimeType: file.type || "image/jpeg" }, known);
+    // Only pieces the model is confident are really in the photo.
+    const visible = keepVisibleItems(analysis.items);
 
-    if (!analysis.has_person_outfit || analysis.items.length === 0) {
+    if (!analysis.has_person_outfit || visible.length === 0) {
       throw new OutfitError("No outfit found in this photo. Try a clearer, full-length shot.", 422);
     }
 
@@ -50,7 +52,7 @@ export async function processOutfit(supabase: SupabaseClient, outfitId: string) 
     const matched: CutoutTarget[] = [];
     let created = 0;
 
-    for (const item of analysis.items) {
+    for (const item of visible) {
       const box = normalizeBox(item.box);
       let itemId =
         item.existing_item_id && knownIds.has(item.existing_item_id) && !usedIds.has(item.existing_item_id)

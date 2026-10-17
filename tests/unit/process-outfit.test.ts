@@ -18,7 +18,10 @@ const JEANS = { id: "jeans", name: "Blue jeans", category: "bottom", colors: ["b
 
 function detected(overrides: Partial<DetectedItem> = {}): DetectedItem {
   return {
+    visible_evidence: "upper body, fully visible",
+    confidence: 0.95,
     existing_item_id: null,
+    match_confidence: 0.9,
     name: "White tee",
     category: "top",
     subcategory: "t-shirt",
@@ -165,12 +168,41 @@ describe("processOutfit", () => {
     const { client, calls } = setup();
     analyzeOutfitPhoto.mockResolvedValue({
       has_person_outfit: true,
-      items: [detected({ existing_item_id: "jeans" }), detected({ existing_item_id: "jeans", name: "Other jeans" })],
+      items: [
+        detected({ existing_item_id: "jeans" }),
+        detected({ existing_item_id: "jeans", name: "Other jeans", box: { x: 0.3, y: 0.55, w: 0.4, h: 0.3 } }),
+      ],
     });
 
     expect(await processOutfit(client as never, "o1")).toMatchObject({ items: 2, created: 1, matched: 1 });
     const rows = callsTo(calls, "outfit_items", "insert")[0].payload as { item_id: string }[];
     expect(new Set(rows.map((r) => r.item_id)).size).toBe(2);
+  });
+
+  it("only saves pieces the model is confident are in the photo", async () => {
+    const { client, calls } = setup({ wardrobe: [] });
+    analyzeOutfitPhoto.mockResolvedValue({
+      has_person_outfit: true,
+      items: [detected(), detected({ name: "Maybe a watch", category: "accessory", confidence: 0.3, box: { x: 0.7, y: 0.4, w: 0.1, h: 0.1 } })],
+    });
+
+    expect(await processOutfit(client as never, "o1")).toMatchObject({ items: 1, created: 1 });
+    expect(callsTo(calls, "wardrobe_items", "insert").map((c) => (c.payload as { name: string }).name)).toEqual(["White tee"]);
+  });
+
+  it("treats an unsure wardrobe match as a new piece instead of linking the wrong one", async () => {
+    const { client } = setup();
+    analyzeOutfitPhoto.mockResolvedValue({
+      has_person_outfit: true,
+      items: [detected({ existing_item_id: "jeans", match_confidence: 0.5 })],
+    });
+    expect(await processOutfit(client as never, "o1")).toMatchObject({ created: 1, matched: 0 });
+  });
+
+  it("422s when nothing confidently visible is left", async () => {
+    const { client } = setup();
+    analyzeOutfitPhoto.mockResolvedValue({ has_person_outfit: true, items: [detected({ confidence: 0.2 })] });
+    await expect(processOutfit(client as never, "o1")).rejects.toMatchObject({ status: 422 });
   });
 
   it("clears previous links before saving, so a re-scan replaces them", async () => {
