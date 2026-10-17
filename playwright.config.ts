@@ -1,5 +1,14 @@
 import { defineConfig, devices } from "@playwright/test";
 
+// The signed-in tests talk to Supabase directly, so they need the app's env.
+for (const file of [".env.local", ".env"]) {
+  try {
+    process.loadEnvFile(file);
+  } catch {
+    // File missing: fine.
+  }
+}
+
 const PORT = 3100;
 
 export default defineConfig({

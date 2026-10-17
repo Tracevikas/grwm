@@ -71,8 +71,12 @@ export function fakeSupabase(handler: Handler = () => undefined) {
     storage: { from: vi.fn(() => storageBucket) },
     auth: {
       getUser: vi.fn(async () => ({ data: { user: { id: "user-1" } } })),
-      signInWithPassword: vi.fn(async () => ({ data: {}, error: null })),
-      signUp: vi.fn(async () => ({ data: { session: {} }, error: null })),
+      signInWithOtp: vi.fn(async () => ({ data: {}, error: null as { message: string; status?: number } | null })),
+      verifyOtp: vi.fn(async () => ({ data: {}, error: null as { message: string } | null })),
+      signInWithOAuth: vi.fn(async () => ({
+        data: { url: "https://test.supabase.co/auth/v1/authorize?provider=google" as string | null },
+        error: null as { message: string } | null,
+      })),
       signOut: vi.fn(async () => ({ error: null })),
       exchangeCodeForSession: vi.fn(async () => ({ error: null })),
     },

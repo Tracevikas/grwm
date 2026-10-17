@@ -3,8 +3,18 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 let pathname = "/";
-vi.mock("next/navigation", () => ({ usePathname: () => pathname }));
-vi.mock("@/app/login/actions", () => ({ signIn: vi.fn(async () => ({})), signUp: vi.fn(async () => ({})) }));
+let search = "";
+vi.mock("next/navigation", () => ({
+  usePathname: () => pathname,
+  useSearchParams: () => new URLSearchParams(search),
+}));
+const sendCode = vi.fn(async (_prev: unknown, fd: FormData) => ({ email: String(fd.get("email")) }));
+const verifyCode = vi.fn(async (_prev: unknown, fd: FormData) => ({ error: "That code is wrong or has expired.", email: String(fd.get("email")) }));
+vi.mock("@/app/login/actions", () => ({
+  sendCode: (p: unknown, fd: FormData) => sendCode(p, fd),
+  verifyCode: (p: unknown, fd: FormData) => verifyCode(p, fd),
+  signInWithGoogle: vi.fn(),
+}));
 
 import { BottomNav } from "@/components/BottomNav";
 import { CropImage, cropStyle } from "@/components/CropImage";
@@ -132,13 +142,46 @@ describe("BottomNav", () => {
 });
 
 describe("LoginPage", () => {
-  it("switches between sign in and sign up", async () => {
-    render(<LoginPage />);
-    expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("Password")).toHaveAttribute("autocomplete", "current-password");
+  beforeEach(() => {
+    search = "";
+  });
 
-    await userEvent.click(screen.getByRole("button", { name: /Create an account/ }));
-    expect(screen.getByRole("button", { name: "Create account" })).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("Password")).toHaveAttribute("autocomplete", "new-password");
+  it("offers Google and an emailed code, with no password", () => {
+    render(<LoginPage />);
+    expect(screen.getByRole("button", { name: "Continue with Google" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Email me a sign-in code" })).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("Password")).not.toBeInTheDocument();
+  });
+
+  it("moves to the code step after sending, and back with 'Use a different email'", async () => {
+    render(<LoginPage />);
+    await userEvent.type(screen.getByLabelText("Email"), "riya@example.com");
+    await userEvent.click(screen.getByRole("button", { name: "Email me a sign-in code" }));
+
+    expect(await screen.findByText("riya@example.com")).toBeInTheDocument();
+    const code = screen.getByLabelText("Sign-in code");
+    expect(code).toHaveAttribute("autocomplete", "one-time-code");
+    expect(code).toHaveAttribute("inputmode", "numeric");
+    expect(screen.getByRole("button", { name: /Resend code in \d+s/ })).toBeDisabled();
+
+    await userEvent.click(screen.getByRole("button", { name: "Use a different email" }));
+    expect(screen.getByLabelText("Email")).toBeInTheDocument();
+  });
+
+  it("shows why a code was rejected", async () => {
+    render(<LoginPage />);
+    await userEvent.type(screen.getByLabelText("Email"), "riya@example.com");
+    await userEvent.click(screen.getByRole("button", { name: "Email me a sign-in code" }));
+    await userEvent.type(await screen.findByLabelText("Sign-in code"), "123456");
+    await userEvent.click(screen.getByRole("button", { name: "Sign in" }));
+
+    expect(await screen.findByText("That code is wrong or has expired.")).toBeInTheDocument();
+    expect(verifyCode.mock.calls.at(-1)![1].get("code")).toBe("123456");
+  });
+
+  it("explains an expired sign-in link", () => {
+    search = "error=link";
+    render(<LoginPage />);
+    expect(screen.getByText(/link has expired/)).toBeInTheDocument();
   });
 });

@@ -1,8 +1,10 @@
 import fs from "node:fs";
+import { createServerClient } from "@supabase/ssr";
 import { expect, test, type Page } from "@playwright/test";
 
 // Runs against your real Supabase project with a dedicated test account:
-//   E2E_EMAIL, E2E_PASSWORD  → navigation tests
+//   E2E_EMAIL, E2E_PASSWORD  → navigation tests (give the test user a password in
+//     Supabase → Authentication → Users; the app itself is passwordless)
 //   E2E_PHOTO (path to a full-length outfit photo) → also the full upload + OpenAI flow,
 //   which costs one vision call and cleans up the outfit it creates.
 const email = process.env.E2E_EMAIL;
@@ -11,16 +13,28 @@ const photo = process.env.E2E_PHOTO;
 
 test.skip(!email || !password, "Set E2E_EMAIL and E2E_PASSWORD to run signed-in tests");
 
-async function signIn(page: Page) {
-  await page.goto("/login");
-  await page.getByPlaceholder("Email").fill(email!);
-  await page.getByPlaceholder("Password").fill(password!);
-  await page.getByRole("button", { name: "Sign in" }).click();
+/**
+ * Signs in through the Supabase API and hands the session cookies to the
+ * browser, so tests don't need to read a code from an inbox.
+ */
+async function signIn(page: Page, baseURL: string) {
+  const cookies: { name: string; value: string }[] = [];
+  const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+    cookies: {
+      getAll: () => cookies,
+      setAll: (toSet) => toSet.forEach(({ name, value }) => cookies.push({ name, value })),
+    },
+  });
+  const { error } = await supabase.auth.signInWithPassword({ email: email!, password: password! });
+  if (error) throw new Error(`Test sign-in failed: ${error.message}`);
+
+  await page.context().addCookies(cookies.map((c) => ({ ...c, url: baseURL })));
+  await page.goto("/");
   await expect(page).toHaveURL(/\/$/);
 }
 
-test.beforeEach(async ({ page }) => {
-  await signIn(page);
+test.beforeEach(async ({ page, baseURL }) => {
+  await signIn(page, baseURL!);
 });
 
 test("wardrobe, history and log tabs work without errors", async ({ page }) => {

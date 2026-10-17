@@ -15,8 +15,10 @@ Snap your outfit every morning. GRWM uses OpenAI vision to spot every piece you'
 ## Setup
 
 1. **Supabase**: create a project, then run [`supabase/schema.sql`](supabase/schema.sql) in the SQL editor. It creates the tables, RLS policies, the stats view, and the private `outfits` storage bucket.
-   - Auth → URL Configuration: add `http://localhost:3000/auth/callback` (and your production URL) to the redirect URLs.
-   - For quick local testing you can turn off **Confirm email** under Auth → Providers → Email.
+   - Auth → URL Configuration: set the Site URL to your production URL and add `http://localhost:3000/auth/callback` and `https://<your-domain>/auth/callback` to the redirect URLs.
+   - Sign-in is passwordless: **Continue with Google**, or a 6-digit code sent by email (the same code creates the account).
+   - **Email code:** in Auth → Email Templates, put `{{ .Token }}` in both the **Magic Link** and **Confirm signup** templates so the email shows the code (the link in it works too). Supabase's built-in sender allows only a few emails an hour; add custom SMTP (Auth → SMTP settings, e.g. Resend or Brevo) before real users sign up.
+   - **Google:** create an OAuth client (type *Web application*) in Google Cloud Console → APIs & Services → Credentials, with authorised redirect URI `https://<project-ref>.supabase.co/auth/v1/callback`. Paste its client ID and secret into Supabase → Auth → Providers → Google and enable it.
 2. **OpenAI**: create an API key.
 3. Copy `.env.example` to `.env.local` and fill in the values.
 4. Run it:

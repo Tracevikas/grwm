@@ -9,22 +9,28 @@ test("redirects signed-out visitors to the login page", async ({ page }) => {
   }
 });
 
-test("login page renders and toggles to sign up", async ({ page }) => {
+test("login page offers Google and an emailed code", async ({ page }) => {
   await page.goto("/login");
   await expect(page.getByRole("heading", { name: /get ready with me/i })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
-
-  await page.getByRole("button", { name: /Create an account/ }).click();
-  await expect(page.getByRole("button", { name: "Create account" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Email me a sign-in code" })).toBeVisible();
+  await expect(page.getByPlaceholder("Password")).toHaveCount(0);
 });
 
-test("wrong credentials show Supabase's error", async ({ page }) => {
+test("Continue with Google hands off to Supabase's Google authorize URL", async ({ page }) => {
   await page.goto("/login");
-  await page.getByPlaceholder("Email").fill("nobody-e2e@example.com");
-  await page.getByPlaceholder("Password").fill("definitely-wrong");
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByText(/invalid login credentials/i)).toBeVisible();
-  await expect(page).toHaveURL(/\/login$/);
+  // Stop at the hand-off: don't actually visit Supabase or Google.
+  const handoff = page.waitForRequest((r) => /\/auth\/v1\/authorize\?.*provider=google/.test(r.url()));
+  await page.route(/\/auth\/v1\/authorize/, (route) => route.abort());
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  const url = new URL((await handoff).url());
+  expect(url.searchParams.get("redirect_to")).toMatch(/\/auth\/callback$/);
+});
+
+test("a broken sign-in link explains what to do", async ({ page }) => {
+  await page.goto("/auth/callback?code=not-a-real-code");
+  await expect(page).toHaveURL(/\/login\?error=link$/);
+  await expect(page.getByText(/link has expired/)).toBeVisible();
 });
 
 test("analyze API refuses signed-out requests", async ({ request }) => {
@@ -44,5 +50,5 @@ test("PWA manifest and icon are served", async ({ request }) => {
 
 test("auth callback without a code returns to login", async ({ page }) => {
   await page.goto("/auth/callback");
-  await expect(page).toHaveURL(/\/login$/);
+  await expect(page).toHaveURL(/\/login\?error=link$/);
 });

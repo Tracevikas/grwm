@@ -15,51 +15,96 @@ let fake = fakeSupabase();
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => fake.client }));
 
 import { GET as callback } from "@/app/auth/callback/route";
-import { signIn, signOut, signUp } from "@/app/login/actions";
+import { sendCode, signInWithGoogle, signOut, verifyCode } from "@/app/login/actions";
 
-const creds = () => {
+const form = (entries: Record<string, string>) => {
   const fd = new FormData();
-  fd.set("email", "a@b.com");
-  fd.set("password", "secret1");
+  for (const [k, v] of Object.entries(entries)) fd.set(k, v);
   return fd;
 };
 
-describe("login actions", () => {
+describe("sendCode", () => {
   beforeEach(() => {
     fake = fakeSupabase();
   });
 
-  it("signIn returns the Supabase error message", async () => {
-    fake.client.auth.signInWithPassword.mockResolvedValue({ data: {}, error: { message: "Invalid login credentials" } } as never);
-    await expect(signIn({}, creds())).resolves.toEqual({ error: "Invalid login credentials" });
+  it("emails a code, creating the account if needed, and moves to the code step", async () => {
+    await expect(sendCode({}, form({ email: "  Riya@Example.com " }))).resolves.toEqual({ email: "riya@example.com" });
+    expect(fake.client.auth.signInWithOtp).toHaveBeenCalledWith({
+      email: "riya@example.com",
+      options: { shouldCreateUser: true, emailRedirectTo: "http://localhost:3000/auth/callback" },
+    });
   });
 
-  it("signIn redirects home on success", async () => {
-    await expect(signIn({}, creds())).rejects.toMatchObject({ url: "/" });
-    expect(fake.client.auth.signInWithPassword).toHaveBeenCalledWith({ email: "a@b.com", password: "secret1" });
+  it("rejects invalid addresses without calling Supabase", async () => {
+    await expect(sendCode({}, form({ email: "not-an-email" }))).resolves.toEqual({ error: "Enter a valid email address." });
+    expect(fake.client.auth.signInWithOtp).not.toHaveBeenCalled();
   });
 
-  it("signUp asks the user to confirm their email when there is no session yet", async () => {
-    fake.client.auth.signUp.mockResolvedValue({ data: { session: null }, error: null } as never);
-    await expect(signUp({}, creds())).resolves.toEqual({ message: expect.stringContaining("confirm your email") });
-    expect(fake.client.auth.signUp).toHaveBeenCalledWith(
-      expect.objectContaining({ options: { emailRedirectTo: "http://localhost:3000/auth/callback" } }),
-    );
+  it("keeps the user on the code step when rate limited", async () => {
+    fake.client.auth.signInWithOtp.mockResolvedValue({ data: {}, error: { message: "rate limit", status: 429 } });
+    await expect(sendCode({}, form({ email: "a@b.co" }))).resolves.toEqual({
+      error: expect.stringContaining("Wait a minute"),
+      email: "a@b.co",
+    });
   });
 
-  it("signUp redirects home when confirmation is disabled", async () => {
-    await expect(signUp({}, creds())).rejects.toMatchObject({ url: "/" });
+  it("surfaces other Supabase errors", async () => {
+    fake.client.auth.signInWithOtp.mockResolvedValue({ data: {}, error: { message: "Signups not allowed" } });
+    await expect(sendCode({}, form({ email: "a@b.co" }))).resolves.toEqual({ error: "Signups not allowed" });
+  });
+});
+
+describe("verifyCode", () => {
+  beforeEach(() => {
+    fake = fakeSupabase();
   });
 
-  it("signUp surfaces errors", async () => {
-    fake.client.auth.signUp.mockResolvedValue({ data: {}, error: { message: "Password too short" } } as never);
-    await expect(signUp({}, creds())).resolves.toEqual({ error: "Password too short" });
+  it("signs in with the code and goes home", async () => {
+    await expect(verifyCode({}, form({ email: "a@b.co", code: "123 456" }))).rejects.toMatchObject({ url: "/" });
+    expect(fake.client.auth.verifyOtp).toHaveBeenCalledWith({ email: "a@b.co", token: "123456", type: "email" });
   });
 
-  it("signOut ends the session and goes to /login", async () => {
-    await expect(signOut()).rejects.toMatchObject({ url: "/login" });
-    expect(fake.client.auth.signOut).toHaveBeenCalled();
+  it("rejects codes that aren't digits", async () => {
+    await expect(verifyCode({}, form({ email: "a@b.co", code: "12ab" }))).resolves.toEqual({
+      error: "Enter the code from the email.",
+      email: "a@b.co",
+    });
+    expect(fake.client.auth.verifyOtp).not.toHaveBeenCalled();
   });
+
+  it("explains a wrong or expired code and stays on the code step", async () => {
+    fake.client.auth.verifyOtp.mockResolvedValue({ data: {}, error: { message: "Token has expired or is invalid" } });
+    await expect(verifyCode({}, form({ email: "a@b.co", code: "000000" }))).resolves.toEqual({
+      error: expect.stringContaining("wrong or has expired"),
+      email: "a@b.co",
+    });
+  });
+});
+
+describe("signInWithGoogle", () => {
+  beforeEach(() => {
+    fake = fakeSupabase();
+  });
+
+  it("sends the user to Google via Supabase, returning to the callback", async () => {
+    await expect(signInWithGoogle()).rejects.toMatchObject({ url: "https://test.supabase.co/auth/v1/authorize?provider=google" });
+    expect(fake.client.auth.signInWithOAuth).toHaveBeenCalledWith({
+      provider: "google",
+      options: { redirectTo: "http://localhost:3000/auth/callback" },
+    });
+  });
+
+  it("returns to login with a message if it can't start", async () => {
+    fake.client.auth.signInWithOAuth.mockResolvedValue({ data: { url: null }, error: { message: "provider disabled" } });
+    await expect(signInWithGoogle()).rejects.toMatchObject({ url: "/login?error=google" });
+  });
+});
+
+it("signOut ends the session and goes to /login", async () => {
+  fake = fakeSupabase();
+  await expect(signOut()).rejects.toMatchObject({ url: "/login" });
+  expect(fake.client.auth.signOut).toHaveBeenCalled();
 });
 
 describe("GET /auth/callback", () => {
@@ -73,12 +118,12 @@ describe("GET /auth/callback", () => {
     expect(res.headers.get("location")).toBe("http://localhost:3000/");
   });
 
-  it("sends bad or missing codes back to /login", async () => {
+  it("sends bad or missing codes back to /login with an explanation", async () => {
     fake.client.auth.exchangeCodeForSession.mockResolvedValue({ error: { message: "expired" } } as never);
     const bad = await callback(new NextRequest("http://localhost:3000/auth/callback?code=old"));
-    expect(bad.headers.get("location")).toBe("http://localhost:3000/login");
+    expect(bad.headers.get("location")).toBe("http://localhost:3000/login?error=link");
 
     const missing = await callback(new NextRequest("http://localhost:3000/auth/callback"));
-    expect(missing.headers.get("location")).toBe("http://localhost:3000/login");
+    expect(missing.headers.get("location")).toBe("http://localhost:3000/login?error=link");
   });
 });

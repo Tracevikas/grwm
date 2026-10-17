@@ -4,30 +4,55 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
-export type AuthState = { error?: string; message?: string };
+export type AuthState = {
+  error?: string;
+  /** Set once a code has been emailed; the form moves to the code step. */
+  email?: string;
+};
 
-export async function signIn(_prev: AuthState, formData: FormData): Promise<AuthState> {
+async function origin() {
+  return (await headers()).get("origin") ?? "";
+}
+
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Emails a one-time code (and a sign-in link) to the address, creating the account if new. */
+export async function sendCode(_prev: AuthState, formData: FormData): Promise<AuthState> {
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  if (!EMAIL.test(email)) return { error: "Enter a valid email address." };
+
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({
-    email: String(formData.get("email")),
-    password: String(formData.get("password")),
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: { shouldCreateUser: true, emailRedirectTo: `${await origin()}/auth/callback` },
   });
-  if (error) return { error: error.message };
+  if (error) {
+    if (error.status === 429) return { error: "Too many codes requested. Wait a minute and try again.", email };
+    return { error: error.message };
+  }
+  return { email };
+}
+
+/** Checks the emailed code and signs the user in. */
+export async function verifyCode(_prev: AuthState, formData: FormData): Promise<AuthState> {
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const token = String(formData.get("code") ?? "").replace(/\s/g, "");
+  if (!/^\d{6,10}$/.test(token)) return { error: "Enter the code from the email.", email };
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.verifyOtp({ email, token, type: "email" });
+  if (error) return { error: "That code is wrong or has expired. Check the email or send a new code.", email };
   redirect("/");
 }
 
-export async function signUp(_prev: AuthState, formData: FormData): Promise<AuthState> {
+export async function signInWithGoogle() {
   const supabase = await createClient();
-  const origin = (await headers()).get("origin") ?? "";
-  const { data, error } = await supabase.auth.signUp({
-    email: String(formData.get("email")),
-    password: String(formData.get("password")),
-    options: { emailRedirectTo: `${origin}/auth/callback` },
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: { redirectTo: `${await origin()}/auth/callback` },
   });
-  if (error) return { error: error.message };
-  // With "Confirm email" enabled in Supabase there is no session until the link is clicked.
-  if (!data.session) return { message: "Check your inbox to confirm your email, then sign in." };
-  redirect("/");
+  if (error || !data.url) redirect("/login?error=google");
+  redirect(data.url);
 }
 
 export async function signOut() {
