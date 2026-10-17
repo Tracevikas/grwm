@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, Geist } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -29,7 +30,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${geistSans.variable} ${display.variable} h-full antialiased`}>
-      <body className="min-h-full font-sans">{children}</body>
+      <body className="min-h-full font-sans">
+        {children}
+        <Analytics />
+      </body>
     </html>
   );
 }
