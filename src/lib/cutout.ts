@@ -64,10 +64,15 @@ let segmenter: Promise<ImageSegmentationPipeline> | null = null;
 
 /** Loads the model once per server process (downloaded on first use, then cached on disk). */
 function getSegmenter() {
-  segmenter ??= import("@huggingface/transformers").then(
-    ({ pipeline }) =>
-      pipeline("image-segmentation", "Xenova/segformer_b2_clothes", { dtype: "q8" }) as Promise<ImageSegmentationPipeline>,
-  );
+  segmenter ??= import("@huggingface/transformers").then(({ env, pipeline }) => {
+    // Serverless hosts only allow writes to /tmp; the default cache lives in node_modules.
+    if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) env.cacheDir = "/tmp/transformers-cache";
+    return pipeline("image-segmentation", "Xenova/segformer_b2_clothes", { dtype: "q8" }) as Promise<ImageSegmentationPipeline>;
+  });
+  // A failed load (e.g. network blip while downloading) shouldn't stick for the life of the process.
+  segmenter.catch(() => {
+    segmenter = null;
+  });
   return segmenter;
 }
 
