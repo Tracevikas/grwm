@@ -22,6 +22,19 @@ const nextConfig: NextConfig = {
       ["./node_modules/onnxruntime-node/bin/napi-v6/linux/x64/**/*", "./node_modules/onnxruntime-common/**/*"],
     ]),
   ),
+  async headers() {
+    return [
+      {
+        // Always fetch the latest service worker so updates reach installed apps.
+        source: "/sw.js",
+        headers: [
+          { key: "Content-Type", value: "application/javascript; charset=utf-8" },
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+          { key: "Content-Security-Policy", value: "default-src 'self'; script-src 'self'" },
+        ],
+      },
+    ];
+  },
   outputFileTracingExcludes: {
     "/*": [
       // The model is downloaded at runtime; never ship a locally cached copy.

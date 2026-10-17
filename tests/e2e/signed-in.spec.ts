@@ -88,7 +88,7 @@ test("logs an outfit photo end to end and catalogues its pieces", async ({ page 
   test.setTimeout(120_000);
 
   await page.goto("/log");
-  await page.locator('input[type="file"]').setInputFiles(photo!);
+  await page.getByLabel("Choose a photo from your gallery").setInputFiles(photo!);
   await expect(page.getByAltText("Outfit preview")).toBeVisible();
   await page.getByLabel("Note").fill("e2e test");
   await page.getByRole("button", { name: "Save to my wardrobe" }).click();

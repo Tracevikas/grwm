@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { SpectrumBand } from "@/lib/colors";
 import type { ItemWithPhoto } from "@/lib/queries";
 import { CATEGORIES, CATEGORY_LABELS, type Category } from "@/lib/types";
+import { InstallPrompt } from "./InstallPrompt";
 import { ItemCard } from "./ItemCard";
 import { Spectrum } from "./Spectrum";
 import { Wordmark } from "./Wordmark";
@@ -51,6 +52,8 @@ export function WardrobeView({ total, items, bands, filters, signOut }: Props) {
           </form>
         )}
       </div>
+
+      <InstallPrompt />
 
       <h1 className="display text-[5.5rem] font-bold">
         {total}{" "}

@@ -2,6 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import { Suspense, useActionState, useEffect, useState } from "react";
+import { InstallPrompt } from "@/components/InstallPrompt";
 import { Wordmark } from "@/components/Wordmark";
 import { sendCode, signInWithGoogle, verifyCode, type AuthState } from "./actions";
 
@@ -37,6 +38,8 @@ export default function LoginPage() {
       <Suspense fallback={<SignIn linkError={null} />}>
         <SignInWithParams />
       </Suspense>
+
+      <InstallPrompt className="mt-8" />
     </main>
   );
 }

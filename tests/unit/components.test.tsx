@@ -7,6 +7,7 @@ let search = "";
 vi.mock("next/navigation", () => ({
   usePathname: () => pathname,
   useSearchParams: () => new URLSearchParams(search),
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn(), replace: vi.fn() }),
 }));
 const sendCode = vi.fn(async (_prev: unknown, fd: FormData) => ({ email: String(fd.get("email")) }));
 const verifyCode = vi.fn(async (_prev: unknown, fd: FormData) => ({ error: "That code is wrong or has expired.", email: String(fd.get("email")) }));
@@ -25,6 +26,7 @@ import { CropImage, cropStyle } from "@/components/CropImage";
 import { GarmentImage } from "@/components/GarmentImage";
 import { ItemCard } from "@/components/ItemCard";
 import { WornAgo, wornAgo } from "@/components/WornAgo";
+import LogOutfitPage from "@/app/(app)/log/page";
 import ConfirmPage from "@/app/auth/confirm/page";
 import LoginPage from "@/app/login/page";
 import type { ItemWithPhoto } from "@/lib/queries";
@@ -192,6 +194,33 @@ describe("LoginPage", () => {
     search = "error=link&reason=Unable+to+exchange+external+code";
     render(<LoginPage />);
     expect(screen.getByText(/Sign-in didn't finish.*\(Unable to exchange external code\)/)).toBeInTheDocument();
+  });
+});
+
+describe("LogOutfitPage", () => {
+  beforeEach(() => {
+    vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: () => "blob:preview", revokeObjectURL: () => {} }));
+  });
+
+  it("offers both the camera and the gallery", () => {
+    render(<LogOutfitPage />);
+    expect(screen.getByRole("button", { name: "Take photo" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "From gallery" })).toBeInTheDocument();
+    // Only the camera picker forces the camera; the gallery one lets phones show their photo library.
+    expect(screen.getByLabelText("Take a photo")).toHaveAttribute("capture", "environment");
+    expect(screen.getByLabelText("Choose a photo from your gallery")).not.toHaveAttribute("capture");
+    expect(screen.getByRole("button", { name: "Save to my wardrobe" })).toBeDisabled();
+  });
+
+  it("previews a photo picked from the gallery", async () => {
+    render(<LogOutfitPage />);
+    const photo = new File(["x"], "outfit.jpg", { type: "image/jpeg" });
+    await userEvent.upload(screen.getByLabelText("Choose a photo from your gallery"), photo);
+
+    expect(screen.getByAltText("Outfit preview")).toHaveAttribute("src", "blob:preview");
+    expect(screen.getByRole("button", { name: "Retake" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Choose another" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save to my wardrobe" })).toBeEnabled();
   });
 });
 

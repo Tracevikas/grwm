@@ -48,7 +48,9 @@ function useToday() {
 
 export default function LogOutfitPage() {
   const router = useRouter();
-  const inputRef = useRef<HTMLInputElement>(null);
+  // Two pickers: `capture` opens the camera directly, the other opens the gallery.
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const galleryRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const todayDate = useToday();
@@ -118,20 +120,35 @@ export default function LogOutfitPage() {
       <h1 className="display text-[3.4rem] font-bold">What are you wearing?</h1>
 
       <input
-        ref={inputRef}
+        ref={cameraRef}
         type="file"
         accept="image/*"
         capture="environment"
         className="hidden"
-        onChange={(e) => choose(e.target.files?.[0])}
+        aria-label="Take a photo"
+        onChange={(e) => {
+          choose(e.target.files?.[0]);
+          e.target.value = "";
+        }}
+      />
+      <input
+        ref={galleryRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        aria-label="Choose a photo from your gallery"
+        onChange={(e) => {
+          choose(e.target.files?.[0]);
+          e.target.value = "";
+        }}
       />
 
       <button
         type="button"
-        onClick={() => inputRef.current?.click()}
+        onClick={() => galleryRef.current?.click()}
         disabled={working}
-        aria-label={preview ? "Change photo" : "Take or choose a photo"}
-        className={`mirror relative mx-auto flex aspect-[3/4] w-[88%] items-center justify-center ${
+        aria-label={preview ? "Change photo" : "Choose a photo"}
+        className={`mirror relative mx-auto flex aspect-[3/4] w-[74%] items-center justify-center ${
           preview ? "bg-surface-2" : "border-2 border-dashed border-line bg-surface/70"
         }`}
       >
@@ -146,7 +163,7 @@ export default function LogOutfitPage() {
                 <circle cx="12" cy="13.3" r="3.3" />
               </svg>
             </span>
-            <span className="text-lg font-semibold">Snap a mirror photo</span>
+            <span className="text-lg font-semibold">Add a mirror photo</span>
             <span className="text-sm text-muted">Head to toe, in good light. We&apos;ll find every piece.</span>
           </span>
         )}
@@ -160,12 +177,35 @@ export default function LogOutfitPage() {
           </span>
         )}
 
-        {preview && !working && phase.step !== "done" && (
-          <span className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-black/55 px-3 py-1.5 text-xs font-medium text-white backdrop-blur">
-            Tap to change
-          </span>
-        )}
       </button>
+
+      {!working && phase.step !== "done" && (
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => cameraRef.current?.click()}
+            className="flex h-12 items-center justify-center gap-2 rounded-full bg-surface font-semibold transition active:scale-[0.98]"
+          >
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinejoin="round" aria-hidden>
+              <path d="M4 8.5h3l1.8-2.5h6.4L17 8.5h3V19H4z" />
+              <circle cx="12" cy="13.3" r="3.3" />
+            </svg>
+            {preview ? "Retake" : "Take photo"}
+          </button>
+          <button
+            type="button"
+            onClick={() => galleryRef.current?.click()}
+            className="flex h-12 items-center justify-center gap-2 rounded-full bg-surface font-semibold transition active:scale-[0.98]"
+          >
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
+              <circle cx="9" cy="10" r="1.6" />
+              <path d="m20.5 16-4.5-4.5L7 19.5" />
+            </svg>
+            {preview ? "Choose another" : "From gallery"}
+          </button>
+        </div>
+      )}
 
       {phase.step !== "done" && (
         <>

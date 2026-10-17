@@ -39,6 +39,8 @@ describe("proxy (auth gate)", () => {
     expect(re.test("/_next/static/chunk.js")).toBe(false);
     expect(re.test("/icon.svg")).toBe(false);
     expect(re.test("/manifest.webmanifest")).toBe(false);
+    expect(re.test("/sw.js")).toBe(false);
+    expect(re.test("/offline.html")).toBe(false);
     expect(re.test("/outfits")).toBe(true);
   });
 });

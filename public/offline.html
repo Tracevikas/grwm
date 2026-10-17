@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>GRWM is offline</title>
+    <style>
+      :root { color-scheme: light dark; --bg: #f5f0ea; --fg: #2b1e17; --muted: #7a6a5e; --accent: #f2c14e; }
+      @media (prefers-color-scheme: dark) { :root { --bg: #1a1411; --fg: #f5ede3; --muted: #a8998b; } }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; min-height: 100dvh; display: grid; place-items: center; padding: 24px;
+        background: var(--bg); color: var(--fg); text-align: center;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      .mirror { width: 96px; aspect-ratio: 3 / 4; margin: 0 auto 24px; border-radius: 999px 999px 18px 18px; background: var(--accent); }
+      h1 { margin: 0 0 8px; font-size: 1.5rem; letter-spacing: -0.02em; }
+      p { margin: 0 auto 24px; max-width: 18rem; color: var(--muted); line-height: 1.5; }
+      button {
+        height: 48px; padding: 0 24px; border: 0; border-radius: 999px; font: inherit; font-weight: 600;
+        background: var(--fg); color: var(--bg); cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="mirror" aria-hidden="true"></div>
+      <h1>You're offline</h1>
+      <p>Your wardrobe needs a connection. Check your Wi-Fi or mobile data, then try again.</p>
+      <button type="button" onclick="location.reload()">Try again</button>
+    </main>
+  </body>
+</html>
