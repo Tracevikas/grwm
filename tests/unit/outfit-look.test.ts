@@ -13,6 +13,11 @@ vi.mock("openai", async (orig) => ({
   },
 }));
 
+// The flat-lay path is tested in flat-lay.test.ts; here it covers nothing by
+// default (so per-piece behaviour is what's under test) unless a test says so.
+const flatLayShots = vi.fn();
+vi.mock("@/lib/flat-lay", () => ({ flatLayShots: (...a: unknown[]) => flatLayShots(...a) }));
+
 /** What the shot check answers. */
 const verdict = (ok: boolean) => ({
   choices: [{ message: { parsed: { what_it_shows: "x", shows_requested_item: ok, shows_other_items: false } } }],
@@ -62,6 +67,8 @@ describe("makeOutfitLook", () => {
     edit.mockReset();
     parse.mockReset();
     parse.mockResolvedValue(verdict(true));
+    flatLayShots.mockReset();
+    flatLayShots.mockResolvedValue(new Map());
     PIECE_PNG = await png();
     const b64 = PIECE_PNG.toString("base64");
     edit.mockResolvedValue({ data: [{ b64_json: b64 }] });
@@ -106,6 +113,37 @@ describe("makeOutfitLook", () => {
     await expect(makeOutfitLook(client as never, "o1")).resolves.toMatch(/^u1\/looks\/o1-/);
     expect(edit).not.toHaveBeenCalled();
     expect(parse).toHaveBeenCalledTimes(1);
+  });
+
+  it("draws several new pieces in ONE flat-lay and saves each cut-out piece", async () => {
+    flatLayShots.mockResolvedValue(new Map([[0, PIECE_PNG], [1, PIECE_PNG]]));
+    const { client, calls } = setup([SHIRT, BLAZER]);
+    await expect(makeOutfitLook(client as never, "o1")).resolves.toMatch(/^u1\/looks\//);
+
+    // Pieces go in catalogue order: outerwear before tops.
+    const [, , pieces] = flatLayShots.mock.calls[0];
+    expect((pieces as { name: string }[]).map((p) => p.name)).toEqual(["Beige blazer", "Black button-up shirt"]);
+    expect(edit).not.toHaveBeenCalled();
+    expect(callsTo(calls, "wardrobe_items", "update").map((c) => (c.payload as { cutout_path: string }).cutout_path)).toEqual([
+      expect.stringMatching(/^u1\/products\/blazer-/),
+      expect.stringMatching(/^u1\/products\/shirt-/),
+    ]);
+  });
+
+  it("gives pieces the flat-lay missed their own request", async () => {
+    // Only the blazer (index 0 in catalogue order) came out of the flat-lay.
+    flatLayShots.mockResolvedValue(new Map([[0, PIECE_PNG]]));
+    const { client } = setup([SHIRT, BLAZER]);
+    await makeOutfitLook(client as never, "o1");
+    expect(edit).toHaveBeenCalledTimes(1);
+    expect(edit.mock.calls[0][0].prompt).toContain("\n\nBlack button-up shirt (top)");
+  });
+
+  it("skips the flat-lay when only one piece needs drawing", async () => {
+    const { client } = setup([SHIRT]);
+    await makeOutfitLook(client as never, "o1");
+    expect(flatLayShots).not.toHaveBeenCalled();
+    expect(edit).toHaveBeenCalledTimes(1);
   });
 
   it("tells each request which other pieces not to show", async () => {

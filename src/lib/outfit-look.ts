@@ -3,6 +3,7 @@ import OpenAI, { toFile } from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
 import sharp from "sharp";
 import { z } from "zod";
+import { flatLayShots } from "./flat-lay";
 import { IMAGE_CONFIG } from "./image-config";
 import { PHOTO_BUCKET } from "./photos";
 import type { Category } from "./types";
@@ -168,74 +169,114 @@ async function generateShot(openai: OpenAI, photo: { data: Buffer; type: string 
 /** Trims the empty margin so every shot is framed tightly around the garment. */
 const finishShot = (raw: Buffer) => sharp(raw).trim({ threshold: 1 }).webp({ quality: 90, alphaQuality: 95 }).toBuffer();
 
-/**
- * Gets a verified product shot for one piece: reuses its existing one if it
- * still checks out, otherwise asks the image model (up to max_retries more
- * times, stricter after a wrong item) and stores the result as the piece's
- * image. A shot that shows the wrong item or has no real transparency is
- * never saved; the piece keeps its segmentation cut-out instead.
- */
-async function productShot(
-  supabase: SupabaseClient,
-  openai: OpenAI,
-  userId: string,
-  photo: { data: Buffer; type: string },
-  piece: Piece,
-  others: string[],
-): Promise<Buffer | null> {
-  const fallback = async () =>
-    piece.cutout_path && !isProductShot(piece.cutout_path) ? download(supabase, piece.cutout_path) : null;
-
+/** The piece's existing product shot, if it still checks out. */
+async function checkedExistingShot(supabase: SupabaseClient, openai: OpenAI, piece: Piece) {
+  if (!isProductShot(piece.cutout_path)) return null;
   try {
-    if (isProductShot(piece.cutout_path)) {
-      const existing = await download(supabase, piece.cutout_path!);
-      if (existing && (await shotMatches(openai, existing, piece))) return existing;
-    }
+    const existing = await download(supabase, piece.cutout_path!);
+    return existing && (await shotMatches(openai, existing, piece)) ? existing : null;
+  } catch {
+    return null;
+  }
+}
 
-    let shot: Buffer | null = null;
-    let wrongItemSeen = false;
-    for (let attempt = 0; attempt <= IMAGE_CONFIG.max_retries && !shot; attempt++) {
+/**
+ * Asks the image model for this one piece (up to max_retries more times,
+ * stricter after a wrong item). Shots that show the wrong item or have no real
+ * transparency are rejected. Returns null if no attempt passed.
+ */
+async function generatePieceShot(openai: OpenAI, photo: { data: Buffer; type: string }, piece: Piece, others: string[]) {
+  let wrongItemSeen = false;
+  for (let attempt = 0; attempt <= IMAGE_CONFIG.max_retries; attempt++) {
+    try {
       const raw = await generateShot(openai, photo, piece, others, wrongItemSeen);
       if (IMAGE_CONFIG.verify_alpha_channel && !(await hasRealTransparency(raw))) {
         console.warn(`Product shot for ${piece.name}: background isn't transparent (attempt ${attempt + 1})`);
         continue;
       }
       const finished = await finishShot(raw);
-      if (await shotMatches(openai, finished, piece)) {
-        shot = finished;
-      } else {
-        wrongItemSeen = true;
-        console.warn(`Product shot for ${piece.name}: showed the wrong item (attempt ${attempt + 1})`);
-      }
+      if (await shotMatches(openai, finished, piece)) return finished;
+      wrongItemSeen = true;
+      console.warn(`Product shot for ${piece.name}: showed the wrong item (attempt ${attempt + 1})`);
+    } catch (err) {
+      console.warn(`Product shot for ${piece.name} failed (attempt ${attempt + 1}):`, err instanceof Error ? err.message : err);
     }
-    if (!shot) {
-      // An earlier product shot that no longer checks out must not keep showing.
-      if (isProductShot(piece.cutout_path)) {
-        await supabase.from("wardrobe_items").update({ cutout_path: null }).eq("id", piece.id);
-        await supabase.storage.from(PHOTO_BUCKET).remove([piece.cutout_path!]);
-      }
-      return fallback();
-    }
-
-    const path = `${userId}/products/${piece.id}-${crypto.randomUUID().slice(0, 8)}.webp`;
-    const { error: uploadError } = await supabase.storage.from(PHOTO_BUCKET).upload(path, shot, { contentType: "image/webp" });
-    if (!uploadError) {
-      const { error } = await supabase.from("wardrobe_items").update({ cutout_path: path }).eq("id", piece.id);
-      if (error) await supabase.storage.from(PHOTO_BUCKET).remove([path]);
-      else if (piece.cutout_path && piece.cutout_path !== path) await supabase.storage.from(PHOTO_BUCKET).remove([piece.cutout_path]);
-    }
-    return shot;
-  } catch (err) {
-    console.warn(`Product shot failed for ${piece.name}:`, err instanceof Error ? err.message : err);
-    return fallback();
   }
+  return null;
+}
+
+/** Stores a new product shot as the piece's image, replacing its old one. */
+async function saveShot(supabase: SupabaseClient, userId: string, piece: Piece, shot: Buffer) {
+  const path = `${userId}/products/${piece.id}-${crypto.randomUUID().slice(0, 8)}.webp`;
+  const { error: uploadError } = await supabase.storage.from(PHOTO_BUCKET).upload(path, shot, { contentType: "image/webp" });
+  if (uploadError) return;
+  const { error } = await supabase.from("wardrobe_items").update({ cutout_path: path }).eq("id", piece.id);
+  if (error) await supabase.storage.from(PHOTO_BUCKET).remove([path]);
+  else if (piece.cutout_path && piece.cutout_path !== path) await supabase.storage.from(PHOTO_BUCKET).remove([piece.cutout_path]);
 }
 
 /**
- * Makes a product shot of every piece in the outfit (one image-model call per
- * new piece, in parallel; pieces worn before reuse theirs), then lays them out
- * as the outfit's background-free "look". Returns the look's path, or null if
- * it couldn't be made (never throws: the outfit is already saved).
+ * No good shot came out: an earlier product shot that no longer checks out
+ * must not keep showing, and the piece falls back to its segmentation cut-out.
+ */
+async function fallbackShot(supabase: SupabaseClient, piece: Piece) {
+  if (isProductShot(piece.cutout_path)) {
+    await supabase.from("wardrobe_items").update({ cutout_path: null }).eq("id", piece.id);
+    await supabase.storage.from(PHOTO_BUCKET).remove([piece.cutout_path!]);
+    return null;
+  }
+  return piece.cutout_path ? download(supabase, piece.cutout_path) : null;
+}
+
+/**
+ * A verified product shot for every piece, as cheaply as possible:
+ *  1. reuse each piece's existing shot if it still checks out;
+ *  2. draw the rest in ONE flat-lay and cut it into pieces (one image call);
+ *  3. pieces the flat-lay didn't cover cleanly get their own request.
+ * New shots are saved as the pieces' images. Missing entries are null.
+ */
+async function productShots(
+  supabase: SupabaseClient,
+  openai: OpenAI,
+  userId: string,
+  photo: { data: Buffer; type: string },
+  pieces: Piece[],
+): Promise<(Buffer | null)[]> {
+  const shots: (Buffer | null)[] = await mapLimit(pieces, 3, (p) => checkedExistingShot(supabase, openai, p));
+  const fresh = new Set<number>();
+
+  const needed = pieces.map((_, i) => i).filter((i) => !shots[i]);
+  // A flat-lay only saves calls when there are at least two pieces to draw.
+  if (needed.length >= 2) {
+    const fromFlatLay = await flatLayShots(openai, photo, needed.map((i) => pieces[i]), hasRealTransparency);
+    for (const [k, shot] of fromFlatLay) {
+      shots[needed[k]] = shot;
+      fresh.add(needed[k]);
+    }
+  }
+
+  const others = (p: Piece) => pieces.filter((o) => o !== p).map((o) => `a ${o.name}`);
+  const remaining = needed.filter((i) => !shots[i]);
+  const individual = await mapLimit(remaining, 3, (i) => generatePieceShot(openai, photo, pieces[i], others(pieces[i])));
+  remaining.forEach((i, k) => {
+    if (individual[k]) {
+      shots[i] = individual[k];
+      fresh.add(i);
+    }
+  });
+
+  await mapLimit(pieces.map((_, i) => i), 3, async (i) => {
+    if (fresh.has(i)) await saveShot(supabase, userId, pieces[i], shots[i]!);
+    else if (!shots[i]) shots[i] = await fallbackShot(supabase, pieces[i]);
+  });
+  return shots;
+}
+
+/**
+ * Makes a product shot of every piece in the outfit (see productShots: reused,
+ * cut from one flat-lay, or drawn one by one), then lays them out as the
+ * outfit's background-free "look". Returns the look's path, or null if it
+ * couldn't be made (never throws: the outfit is already saved).
  */
 export async function makeOutfitLook(supabase: SupabaseClient, outfitId: string): Promise<string | null> {
   const { data: outfit } = await supabase
@@ -264,10 +305,7 @@ export async function makeOutfitLook(supabase: SupabaseClient, outfitId: string)
     const photo = { data: Buffer.from(await file.arrayBuffer()), type: file.type || "image/jpeg" };
 
     const openai = new OpenAI({ maxRetries: 4 });
-    const others = (p: Piece) => pieces.filter((o) => o !== p).map((o) => `a ${o.name}`);
-    const shots = (await mapLimit(pieces, 3, (p) => productShot(supabase, openai, outfit.user_id, photo, p, others(p)))).filter(
-      (s): s is Buffer => Boolean(s),
-    );
+    const shots = (await productShots(supabase, openai, outfit.user_id, photo, pieces)).filter((s): s is Buffer => Boolean(s));
     if (shots.length === 0) throw new Error("No piece could be drawn");
 
     const path = `${outfit.user_id}/looks/${outfitId}-${crypto.randomUUID().slice(0, 8)}.webp`;
