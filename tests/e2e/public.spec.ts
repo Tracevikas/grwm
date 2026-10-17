@@ -9,11 +9,11 @@ test("redirects signed-out visitors to the login page", async ({ page }) => {
   }
 });
 
-test("login page offers Google and an emailed code", async ({ page }) => {
+test("login page offers Google and an emailed sign-in link", async ({ page }) => {
   await page.goto("/login");
   await expect(page.getByRole("heading", { name: /get ready with me/i })).toBeVisible();
   await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Email me a sign-in code" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Email me a sign-in link" })).toBeVisible();
   await expect(page.getByPlaceholder("Password")).toHaveCount(0);
 });
 
@@ -27,10 +27,19 @@ test("Continue with Google hands off to Supabase's Google authorize URL", async 
   expect(url.searchParams.get("redirect_to")).toMatch(/\/auth\/callback$/);
 });
 
-test("a broken sign-in link explains what to do", async ({ page }) => {
+test("a failed Google return shows Supabase's reason", async ({ page }) => {
   await page.goto("/auth/callback?code=not-a-real-code");
-  await expect(page).toHaveURL(/\/login\?error=link$/);
-  await expect(page.getByText(/link has expired/)).toBeVisible();
+  await expect(page).toHaveURL(/\/login\?error=link&reason=/);
+  await expect(page.getByText(/Sign-in didn't finish/)).toBeVisible();
+});
+
+test("an expired email link explains what to do", async ({ page }) => {
+  await page.goto("/auth/confirm#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired");
+  await expect(page.getByText("This sign-in link has expired or was already used.")).toBeVisible();
+  // Tokens and errors are cleared from the address bar.
+  await expect(page).toHaveURL(/\/auth\/confirm$/);
+  await page.getByRole("link", { name: "Back to sign in" }).click();
+  await expect(page).toHaveURL(/\/login$/);
 });
 
 test("analyze API refuses signed-out requests", async ({ request }) => {

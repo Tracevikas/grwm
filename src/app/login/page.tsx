@@ -9,7 +9,7 @@ const RESEND_AFTER = 60;
 
 const LINK_ERRORS: Record<string, string> = {
   google: "Google sign-in didn't start. Try again.",
-  link: "That sign-in link has expired or was opened in another browser. Send yourself a new code.",
+  link: "Sign-in didn't finish. Try again, or use the email link instead.",
 };
 
 export default function LoginPage() {
@@ -42,8 +42,18 @@ export default function LoginPage() {
 }
 
 function SignInWithParams() {
-  const error = useSearchParams().get("error");
-  return <SignIn linkError={error ? (LINK_ERRORS[error] ?? null) : null} />;
+  const params = useSearchParams();
+  const error = params.get("error");
+  const reason = params.get("reason");
+
+  // If Supabase sent the email link's session here instead of /auth/confirm
+  // (redirect URL not allow-listed), hand it over rather than losing it.
+  useEffect(() => {
+    if (window.location.hash.includes("access_token=")) window.location.replace(`/auth/confirm${window.location.hash}`);
+  }, []);
+
+  const message = error ? LINK_ERRORS[error] : undefined;
+  return <SignIn linkError={message ? (reason ? `${message} (${reason})` : message) : null} />;
 }
 
 function SignIn({ linkError }: { linkError: string | null }) {
@@ -62,7 +72,7 @@ function SignIn({ linkError }: { linkError: string | null }) {
       )}
 
       {email ? (
-        <CodeStep
+        <LinkSent
           email={email}
           send={send}
           sending={sending}
@@ -105,17 +115,17 @@ function SignIn({ linkError }: { linkError: string | null }) {
               disabled={sending}
               className="h-14 w-full rounded-full bg-foreground text-base font-semibold text-background transition active:scale-[0.99] disabled:opacity-60"
             >
-              {sending ? "Sending code…" : "Email me a sign-in code"}
+              {sending ? "Sending link…" : "Email me a sign-in link"}
             </button>
           </form>
-          <p className="text-center text-xs text-muted">New here? The same code creates your account.</p>
+          <p className="text-center text-xs text-muted">New here? The same link creates your account.</p>
         </>
       )}
     </div>
   );
 }
 
-type CodeStepProps = {
+type LinkSentProps = {
   email: string;
   send: (fd: FormData) => void;
   sending: boolean;
@@ -126,10 +136,10 @@ type CodeStepProps = {
   onChangeEmail: () => void;
 };
 
-function CodeStep({ email, send, sending, sendError, verify, verifying, verifyError, onChangeEmail }: CodeStepProps) {
+function LinkSent({ email, send, sending, sendError, verify, verifying, verifyError, onChangeEmail }: LinkSentProps) {
   const [wait, setWait] = useState(RESEND_AFTER);
 
-  // Supabase allows one code per minute per address.
+  // Supabase allows one email per minute per address.
   useEffect(() => {
     if (wait <= 0) return;
     const t = setTimeout(() => setWait((w) => w - 1), 1000);
@@ -137,41 +147,25 @@ function CodeStep({ email, send, sending, sendError, verify, verifying, verifyEr
   }, [wait]);
 
   return (
-    <div className="space-y-4">
-      <div>
-        <p className="text-lg font-semibold">Check your email</p>
-        <p className="mt-1 text-sm text-muted">
-          We sent a code to <span className="font-medium text-foreground">{email}</span>. Enter it below, or tap the link in
-          the email.
+    <div className="space-y-5">
+      <div className="rounded-[1.75rem] bg-surface p-5">
+        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-accent text-accent-ink" aria-hidden>
+          <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinejoin="round">
+            <rect x="3" y="5.5" width="18" height="13" rx="2.5" />
+            <path d="m4 7.5 8 6 8-6" />
+          </svg>
+        </span>
+        <p className="mt-4 text-xl font-semibold">Check your email</p>
+        <p className="mt-1 text-muted">
+          We sent a sign-in link to <span className="font-medium text-foreground">{email}</span>.
         </p>
-      </div>
-
-      <form action={verify} className="space-y-3">
-        <input type="hidden" name="email" value={email} />
-        <input
-          name="code"
-          required
-          autoFocus
-          inputMode="numeric"
-          autoComplete="one-time-code"
-          pattern="\d{6,10}"
-          maxLength={10}
-          placeholder="••••••"
-          aria-label="Sign-in code"
-          className="h-16 w-full rounded-2xl bg-surface px-4 text-center font-mono text-3xl tracking-[0.4em] outline-none placeholder:text-muted/50 focus:ring-2 focus:ring-accent-strong"
-        />
-        {(verifyError || sendError) && (
-          <p className="text-sm font-medium text-danger" role="alert">
-            {verifyError || sendError}
+        <p className="mt-3 text-sm text-muted">Tap the link in the email to sign in. Not there? Check spam or promotions.</p>
+        {sendError && (
+          <p className="mt-3 text-sm font-medium text-danger" role="alert">
+            {sendError}
           </p>
         )}
-        <button
-          disabled={verifying}
-          className="h-14 w-full rounded-full bg-foreground text-base font-semibold text-background transition active:scale-[0.99] disabled:opacity-60"
-        >
-          {verifying ? "Checking…" : "Sign in"}
-        </button>
-      </form>
+      </div>
 
       <div className="flex items-center justify-between text-sm">
         <button type="button" onClick={onChangeEmail} className="font-medium text-muted underline-offset-2 hover:underline">
@@ -180,10 +174,42 @@ function CodeStep({ email, send, sending, sendError, verify, verifying, verifyEr
         <form action={send} onSubmit={() => setWait(RESEND_AFTER)}>
           <input type="hidden" name="email" value={email} />
           <button disabled={wait > 0 || sending} className="font-medium text-accent-strong disabled:text-muted">
-            {sending ? "Sending…" : wait > 0 ? `Resend code in ${wait}s` : "Resend code"}
+            {sending ? "Sending…" : wait > 0 ? `Resend link in ${wait}s` : "Resend link"}
           </button>
         </form>
       </div>
+
+      {/* For emails that show a code (when the template includes {{ .Token }}). */}
+      <details className="group text-sm" open={Boolean(verifyError)}>
+        <summary className="cursor-pointer list-none text-center font-medium text-muted underline-offset-2 hover:underline">
+          Got a code instead? Enter it
+        </summary>
+        <form action={verify} className="mt-3 space-y-3">
+          <input type="hidden" name="email" value={email} />
+          <input
+            name="code"
+            required
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            pattern="\d{6,10}"
+            maxLength={10}
+            placeholder="••••••"
+            aria-label="Sign-in code"
+            className="h-14 w-full rounded-2xl bg-surface px-4 text-center font-mono text-2xl tracking-[0.4em] outline-none placeholder:text-muted/50 focus:ring-2 focus:ring-accent-strong"
+          />
+          {verifyError && (
+            <p className="font-medium text-danger" role="alert">
+              {verifyError}
+            </p>
+          )}
+          <button
+            disabled={verifying}
+            className="h-12 w-full rounded-full bg-foreground font-semibold text-background transition active:scale-[0.99] disabled:opacity-60"
+          >
+            {verifying ? "Checking…" : "Sign in with code"}
+          </button>
+        </form>
+      </details>
     </div>
   );
 }

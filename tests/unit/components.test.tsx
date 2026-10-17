@@ -10,6 +10,10 @@ vi.mock("next/navigation", () => ({
 }));
 const sendCode = vi.fn(async (_prev: unknown, fd: FormData) => ({ email: String(fd.get("email")) }));
 const verifyCode = vi.fn(async (_prev: unknown, fd: FormData) => ({ error: "That code is wrong or has expired.", email: String(fd.get("email")) }));
+const { setSession } = vi.hoisted(() => ({ setSession: vi.fn() }));
+vi.mock("@/lib/supabase/client", () => ({
+  createClient: () => ({ auth: { setSession: (...a: unknown[]) => setSession(...a) } }),
+}));
 vi.mock("@/app/login/actions", () => ({
   sendCode: (p: unknown, fd: FormData) => sendCode(p, fd),
   verifyCode: (p: unknown, fd: FormData) => verifyCode(p, fd),
@@ -21,6 +25,7 @@ import { CropImage, cropStyle } from "@/components/CropImage";
 import { GarmentImage } from "@/components/GarmentImage";
 import { ItemCard } from "@/components/ItemCard";
 import { WornAgo, wornAgo } from "@/components/WornAgo";
+import ConfirmPage from "@/app/auth/confirm/page";
 import LoginPage from "@/app/login/page";
 import type { ItemWithPhoto } from "@/lib/queries";
 
@@ -146,42 +151,79 @@ describe("LoginPage", () => {
     search = "";
   });
 
-  it("offers Google and an emailed code, with no password", () => {
+  it("offers Google and an emailed sign-in link, with no password", () => {
     render(<LoginPage />);
     expect(screen.getByRole("button", { name: "Continue with Google" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Email me a sign-in code" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Email me a sign-in link" })).toBeInTheDocument();
     expect(screen.queryByPlaceholderText("Password")).not.toBeInTheDocument();
   });
 
-  it("moves to the code step after sending, and back with 'Use a different email'", async () => {
+  it("asks the user to check their email, and can go back with 'Use a different email'", async () => {
     render(<LoginPage />);
     await userEvent.type(screen.getByLabelText("Email"), "riya@example.com");
-    await userEvent.click(screen.getByRole("button", { name: "Email me a sign-in code" }));
+    await userEvent.click(screen.getByRole("button", { name: "Email me a sign-in link" }));
 
-    expect(await screen.findByText("riya@example.com")).toBeInTheDocument();
-    const code = screen.getByLabelText("Sign-in code");
-    expect(code).toHaveAttribute("autocomplete", "one-time-code");
-    expect(code).toHaveAttribute("inputmode", "numeric");
-    expect(screen.getByRole("button", { name: /Resend code in \d+s/ })).toBeDisabled();
+    expect(await screen.findByText("Check your email")).toBeInTheDocument();
+    expect(screen.getByText("riya@example.com")).toBeInTheDocument();
+    expect(screen.getByText(/Tap the link in the email to sign in/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Resend link in \d+s/ })).toBeDisabled();
 
     await userEvent.click(screen.getByRole("button", { name: "Use a different email" }));
     expect(screen.getByLabelText("Email")).toBeInTheDocument();
   });
 
-  it("shows why a code was rejected", async () => {
+  it("still accepts a code, tucked behind 'Got a code instead?'", async () => {
     render(<LoginPage />);
     await userEvent.type(screen.getByLabelText("Email"), "riya@example.com");
-    await userEvent.click(screen.getByRole("button", { name: "Email me a sign-in code" }));
-    await userEvent.type(await screen.findByLabelText("Sign-in code"), "123456");
-    await userEvent.click(screen.getByRole("button", { name: "Sign in" }));
+    await userEvent.click(screen.getByRole("button", { name: "Email me a sign-in link" }));
+    await userEvent.click(await screen.findByText(/Got a code instead/));
+
+    const code = screen.getByLabelText("Sign-in code");
+    expect(code).toHaveAttribute("autocomplete", "one-time-code");
+    expect(code).toHaveAttribute("inputmode", "numeric");
+    await userEvent.type(code, "123456");
+    await userEvent.click(screen.getByRole("button", { name: "Sign in with code" }));
 
     expect(await screen.findByText("That code is wrong or has expired.")).toBeInTheDocument();
     expect(verifyCode.mock.calls.at(-1)![1].get("code")).toBe("123456");
   });
 
-  it("explains an expired sign-in link", () => {
-    search = "error=link";
+  it("explains a failed sign-in, including Supabase's reason", () => {
+    search = "error=link&reason=Unable+to+exchange+external+code";
     render(<LoginPage />);
-    expect(screen.getByText(/link has expired/)).toBeInTheDocument();
+    expect(screen.getByText(/Sign-in didn't finish.*\(Unable to exchange external code\)/)).toBeInTheDocument();
+  });
+});
+
+describe("ConfirmPage (email link landing)", () => {
+  const replace = vi.fn();
+
+  beforeEach(() => {
+    setSession.mockReset();
+    replace.mockReset();
+    vi.stubGlobal("location", { ...window.location, hash: "", pathname: "/auth/confirm", replace });
+  });
+
+  it("saves the session from the link and continues to the wardrobe", async () => {
+    setSession.mockResolvedValue({ error: null });
+    window.location.hash = "#access_token=at&refresh_token=rt&type=magiclink";
+    render(<ConfirmPage />);
+
+    expect(screen.getByText("Signing you in…")).toBeInTheDocument();
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith("/"));
+    expect(setSession).toHaveBeenCalledWith({ access_token: "at", refresh_token: "rt" });
+  });
+
+  it("explains an expired or reused link", async () => {
+    window.location.hash = "#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid";
+    render(<ConfirmPage />);
+    expect(await screen.findByText("This sign-in link has expired or was already used.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Back to sign in" })).toHaveAttribute("href", "/login");
+    expect(setSession).not.toHaveBeenCalled();
+  });
+
+  it("handles a link with no session at all", async () => {
+    render(<ConfirmPage />);
+    expect(await screen.findByText("This sign-in link isn't valid.")).toBeInTheDocument();
   });
 });

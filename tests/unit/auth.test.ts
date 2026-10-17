@@ -13,6 +13,9 @@ vi.mock("next/headers", () => ({
 
 let fake = fakeSupabase();
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => fake.client }));
+// The email link is sent with a separate implicit-flow client.
+const createSupabaseClient = vi.fn<(...args: unknown[]) => unknown>(() => fake.client);
+vi.mock("@supabase/supabase-js", () => ({ createClient: (...a: unknown[]) => createSupabaseClient(...a) }));
 
 import { GET as callback } from "@/app/auth/callback/route";
 import { sendCode, signInWithGoogle, signOut, verifyCode } from "@/app/login/actions";
@@ -28,12 +31,18 @@ describe("sendCode", () => {
     fake = fakeSupabase();
   });
 
-  it("emails a code, creating the account if needed, and moves to the code step", async () => {
+  it("emails a sign-in link to /auth/confirm, creating the account if needed", async () => {
     await expect(sendCode({}, form({ email: "  Riya@Example.com " }))).resolves.toEqual({ email: "riya@example.com" });
     expect(fake.client.auth.signInWithOtp).toHaveBeenCalledWith({
       email: "riya@example.com",
-      options: { shouldCreateUser: true, emailRedirectTo: "http://localhost:3000/auth/callback" },
+      options: { shouldCreateUser: true, emailRedirectTo: "http://localhost:3000/auth/confirm" },
     });
+  });
+
+  it("uses the implicit flow so the link works in any browser", async () => {
+    await sendCode({}, form({ email: "a@b.co" }));
+    const options = createSupabaseClient.mock.calls.at(-1)![2] as { auth: { flowType: string; persistSession: boolean } };
+    expect(options.auth).toMatchObject({ flowType: "implicit", persistSession: false });
   });
 
   it("rejects invalid addresses without calling Supabase", async () => {
@@ -118,12 +127,28 @@ describe("GET /auth/callback", () => {
     expect(res.headers.get("location")).toBe("http://localhost:3000/");
   });
 
-  it("sends bad or missing codes back to /login with an explanation", async () => {
-    fake.client.auth.exchangeCodeForSession.mockResolvedValue({ error: { message: "expired" } } as never);
+  it("sends bad or missing codes back to /login with the reason", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    fake.client.auth.exchangeCodeForSession.mockResolvedValue({ error: { message: "code verifier not found" } } as never);
     const bad = await callback(new NextRequest("http://localhost:3000/auth/callback?code=old"));
-    expect(bad.headers.get("location")).toBe("http://localhost:3000/login?error=link");
+    expect(new URL(bad.headers.get("location")!).searchParams.get("reason")).toBe(
+      "it finished in a different browser from the one you started in",
+    );
+
+    fake.client.auth.exchangeCodeForSession.mockResolvedValue({ error: { message: "Invalid grant" } } as never);
+    const other = await callback(new NextRequest("http://localhost:3000/auth/callback?code=old"));
+    expect(other.headers.get("location")).toBe("http://localhost:3000/login?error=link&reason=Invalid+grant");
 
     const missing = await callback(new NextRequest("http://localhost:3000/auth/callback"));
     expect(missing.headers.get("location")).toBe("http://localhost:3000/login?error=link");
+  });
+
+  it("passes on provider errors that Supabase reports, e.g. Google misconfigured", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const res = await callback(
+      new NextRequest("http://localhost:3000/auth/callback?error=server_error&error_description=Unable+to+exchange+external+code"),
+    );
+    expect(res.headers.get("location")).toBe("http://localhost:3000/login?error=link&reason=Unable+to+exchange+external+code");
+    expect(fake.client.auth.exchangeCodeForSession).not.toHaveBeenCalled();
   });
 });
