@@ -59,6 +59,19 @@ describe("keepVisibleItems", () => {
     expect(sure.existing_item_id).toBe("b");
   });
 
+  it("drops a pocket square listed as its own piece: it's part of the blazer", () => {
+    const out = keepVisibleItems([
+      item({ name: "Beige suit blazer", category: "outerwear" }),
+      item({ name: "Light grey pocket square", category: "accessory", box: { x: 0.6, y: 0.7, w: 0.1, h: 0.06 } }),
+    ]);
+    expect(out.map((i) => i.name)).toEqual(["Beige suit blazer"]);
+  });
+
+  it("keeps a blazer whose name mentions its pocket square", () => {
+    const out = keepVisibleItems([item({ name: "Beige/tan suit blazer with pocket square", category: "outerwear" })]);
+    expect(out).toHaveLength(1);
+  });
+
   it("keeps the model's top-to-bottom order", () => {
     const out = keepVisibleItems([
       item({ name: "Top", confidence: 0.7 }),

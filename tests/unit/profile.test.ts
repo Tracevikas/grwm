@@ -76,7 +76,9 @@ describe("deleting your data", () => {
           ? [{ id: "1", name: "a.jpg" }, { id: null, name: "cutouts" }, { id: null, name: "looks" }]
           : folder === "u1/cutouts"
             ? [{ id: "2", name: "shirt.webp" }]
-            : [{ id: "3", name: "o1.webp" }],
+            : folder === "u1/looks"
+            ? [{ id: "3", name: "o1.webp" }]
+            : [],
       error: null,
     }));
   });

@@ -71,6 +71,9 @@ export const MIN_MATCH_CONFIDENCE = 0.75;
 /** Boxes smaller than this share of the photo are specks, not garments. */
 const MIN_BOX_AREA = 0.0015;
 
+/** Details that live on another garment; never a wardrobe piece of their own. */
+const ATTACHED_DETAIL = /pocket[\s-]?square|lapel[\s-]?pin|brooch|collar[\s-]?(bar|pin|stay)|tie[\s-]?(clip|bar|pin)|boutonni[eè]re/i;
+
 const area = (b: Box) => Math.max(0, b.w) * Math.max(0, b.h);
 
 function overlap(a: Box, b: Box) {
@@ -83,14 +86,20 @@ function overlap(a: Box, b: Box) {
 
 /**
  * Keeps only items the model is confident are visible: drops low-confidence
- * and speck-sized detections, and duplicates (same category, mostly the same
- * box), and downgrades unsure wardrobe matches to new items.
+ * and speck-sized detections, details attached to a garment (pocket squares,
+ * pins), and duplicates (same category, mostly the same box), and downgrades
+ * unsure wardrobe matches to new items.
  */
 export function keepVisibleItems(items: DetectedItem[]): DetectedItem[] {
+  const wearsClothing = items.some((i) => ["top", "outerwear", "dress"].includes(i.category));
   // Most confident first, so a duplicate loses to the better detection.
   const kept = new Map<DetectedItem, DetectedItem>();
   for (const item of [...items].sort((a, b) => b.confidence - a.confidence)) {
     if (item.confidence < MIN_CONFIDENCE || area(item.box) < MIN_BOX_AREA) continue;
+    // A pocket square in a blazer is part of the blazer, whatever the model says.
+    // Only standalone accessories: a "blazer with pocket square" is still a blazer.
+    const isDetail = (item.category === "accessory" || item.category === "other") && ATTACHED_DETAIL.test(`${item.name} ${item.subcategory ?? ""}`);
+    if (wearsClothing && isDetail) continue;
     const duplicate = [...kept.keys()].some((k) => k.category === item.category && overlap(k.box, item.box) > 0.6);
     if (duplicate) continue;
     const unsureMatch = item.existing_item_id && item.match_confidence < MIN_MATCH_CONFIDENCE;

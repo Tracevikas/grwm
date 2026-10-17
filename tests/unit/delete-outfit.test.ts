@@ -29,7 +29,9 @@ describe("deleteOutfitAndOrphans", () => {
     expect(callsTo(calls, "outfits", "delete")[0].filters).toContainEqual(["eq", "id", "o1"]);
     const [delItems] = callsTo(calls, "wardrobe_items", "delete");
     expect(delItems.filters).toContainEqual(["in", "id", ["shirt"]]);
-    expect(storage.remove).toHaveBeenCalledWith(["u1/o1.jpg", "u1/looks/o1.webp", "u1/cutouts/shirt.webp"]);
+    // Piece images go with their pieces; then the outfit photo and look.
+    expect(storage.remove).toHaveBeenCalledWith(["u1/cutouts/shirt.webp"]);
+    expect(storage.remove).toHaveBeenCalledWith(["u1/o1.jpg", "u1/looks/o1.webp"]);
   });
 
   it("keeps pieces worn elsewhere and gives them a cover photo from that outfit", async () => {

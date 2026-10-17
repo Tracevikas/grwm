@@ -1,36 +1,157 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import OpenAI, { toFile } from "openai";
+import sharp from "sharp";
 import { PHOTO_BUCKET } from "./photos";
+import type { Category } from "./types";
 
-type Piece = { name: string; category: string; description?: string | null };
+type Piece = {
+  id: string;
+  name: string;
+  category: Category;
+  subcategory?: string | null;
+  description?: string | null;
+  cutout_path?: string | null;
+};
 
-export function lookPrompt(pieces: Piece[]) {
-  const n = pieces.length;
-  const list = pieces.map((p, i) => `${i + 1}. ${p.name} (${p.category})${p.description ? `: ${p.description}` : ""}`).join("\n");
-  return `Make a clean product flat-lay of the clothing in this photo, as a catalogue would show it.
+/** Product shots made by the image model live here; segmentation cut-outs live in /cutouts/. */
+export const isProductShot = (path: string | null | undefined) => Boolean(path?.includes("/products/"));
 
-Show EXACTLY these ${n} ${n === 1 ? "piece" : "pieces"} and nothing else:
-${list}
+export function piecePrompt(piece: Pick<Piece, "name" | "category" | "description">) {
+  return `Extract ONLY this one item from the photo and show it as a clean catalogue product photo:
+
+${piece.name} (${piece.category})${piece.description ? `: ${piece.description}` : ""}
 
 Rules:
-- Draw only the ${n} ${n === 1 ? "piece" : "pieces"} listed. Do not add any garment or accessory that is not listed: no trousers, skirts, shoes, belts, ties, bags, watches or pocket squares unless they are in the list above.
-- The photo may be cropped (for example waist up). Never invent the parts of the outfit that are out of frame.
-- Copy each piece exactly from the photo: same colour and shade, fabric texture, pattern, collar, lapels, buttons, pockets and anything attached to it (e.g. a pocket square stays in the blazer pocket, not as a separate item).
-- Remove the person completely: no body, skin, face, hair or hands.
-- Remove the background completely; nothing behind the clothes.
-- Lay the pieces out neatly side by side, front-facing, evenly lit. No mannequin, no text, no props.`;
+- Show just this single item, complete and front-facing, laid flat or on an invisible mannequin. If an arm, another garment or the photo edge hides part of it, complete that same item naturally.
+- Copy it exactly from the photo: the same colour and shade, fabric texture, pattern, collar, lapels, buttons, pockets and stitching. Anything attached to it stays on it (e.g. a pocket square stays in the blazer pocket).
+- Nothing else at all: no other garments or accessories, no person, skin, face, hair or hands, no hanger, no background, no shadow, no text.`;
+}
+
+/** Pieces in the order a catalogue lays out a look. */
+const ORDER: Category[] = ["outerwear", "top", "dress", "bottom", "shoes", "bag", "accessory", "other"];
+
+/**
+ * Lays the product shots out on one transparent canvas: one centred, or a
+ * two-column grid. Every piece comes from its own shot, so nothing can appear
+ * in the look that wasn't detected in the photo.
+ */
+export async function composeLook(images: Buffer[], width = 1024) {
+  const n = images.length;
+  const cols = n === 1 ? 1 : 2;
+  const rows = Math.ceil(n / cols);
+  const cellW = Math.floor(width / cols);
+  // Portrait cells (garments are taller than wide); the canvas grows with the rows.
+  const cellH = Math.round(cellW * 1.3);
+  const height = rows * cellH;
+  const pad = 0.05;
+
+  const layers = await Promise.all(
+    images.map(async (img, i) => {
+      const fitted = await sharp(img)
+        .resize({
+          width: Math.floor(cellW * (1 - 2 * pad)),
+          height: Math.floor(cellH * (1 - 2 * pad)),
+          fit: "inside",
+        })
+        .png()
+        .toBuffer({ resolveWithObject: true });
+      const row = Math.floor(i / cols);
+      // A lone piece on the last row sits in the middle.
+      const inRow = row === rows - 1 ? n - row * cols : cols;
+      const col = i % cols;
+      const rowLeft = Math.floor((width - inRow * cellW) / 2);
+      return {
+        input: fitted.data,
+        left: rowLeft + col * cellW + Math.floor((cellW - fitted.info.width) / 2),
+        top: row * cellH + Math.floor((cellH - fitted.info.height) / 2),
+      };
+    }),
+  );
+
+  return sharp({ create: { width, height, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
+    .composite(layers)
+    .webp({ quality: 90, alphaQuality: 95 })
+    .toBuffer();
+}
+
+/** Runs tasks with at most `limit` in flight (image APIs rate-limit bursts). */
+async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i]);
+    }
+  });
+  await Promise.all(workers);
+  return out;
+}
+
+async function download(supabase: SupabaseClient, path: string) {
+  const { data } = await supabase.storage.from(PHOTO_BUCKET).download(path);
+  return data ? Buffer.from(await data.arrayBuffer()) : null;
 }
 
 /**
- * Asks the OpenAI image model for a background-free flat-lay of exactly the
- * outfit's pieces, stores it next to the photo and records it on the outfit.
- * Returns the stored path, or null if it couldn't be made (never throws: the
- * outfit is already saved, and the photo still shows).
+ * Gets a product shot for one piece: reuses its existing one, or asks the image
+ * model to extract it from the photo and stores it as the piece's image.
+ * Falls back to the segmentation cut-out if generation fails.
+ */
+async function productShot(
+  supabase: SupabaseClient,
+  openai: OpenAI,
+  userId: string,
+  photo: { data: Buffer; type: string },
+  piece: Piece,
+): Promise<Buffer | null> {
+  if (isProductShot(piece.cutout_path)) {
+    const existing = await download(supabase, piece.cutout_path!);
+    if (existing) return existing;
+  }
+
+  try {
+    const tall = piece.category === "bottom" || piece.category === "dress" || piece.category === "outerwear";
+    const result = await openai.images.edit({
+      model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-2.5-flare",
+      image: await toFile(photo.data, "outfit.jpg", { type: photo.type }),
+      prompt: piecePrompt(piece),
+      background: "transparent",
+      output_format: "png",
+      // High quality keeps fabric, buttons and shades closest to the photo.
+      quality: "high",
+      size: tall ? "1024x1536" : "1024x1024",
+    });
+    const b64 = result.data?.[0]?.b64_json;
+    if (!b64) throw new Error("no image returned");
+
+    // Trim the empty margin so every shot is framed tightly around the garment.
+    const shot = await sharp(Buffer.from(b64, "base64")).trim({ threshold: 1 }).webp({ quality: 90, alphaQuality: 95 }).toBuffer();
+
+    const path = `${userId}/products/${piece.id}-${crypto.randomUUID().slice(0, 8)}.webp`;
+    const { error: uploadError } = await supabase.storage.from(PHOTO_BUCKET).upload(path, shot, { contentType: "image/webp" });
+    if (!uploadError) {
+      const { error } = await supabase.from("wardrobe_items").update({ cutout_path: path }).eq("id", piece.id);
+      if (error) await supabase.storage.from(PHOTO_BUCKET).remove([path]);
+      else if (piece.cutout_path && piece.cutout_path !== path) await supabase.storage.from(PHOTO_BUCKET).remove([piece.cutout_path]);
+    }
+    return shot;
+  } catch (err) {
+    console.warn(`Product shot failed for ${piece.name}:`, err instanceof Error ? err.message : err);
+    return piece.cutout_path ? download(supabase, piece.cutout_path) : null;
+  }
+}
+
+/**
+ * Makes a product shot of every piece in the outfit (one image-model call per
+ * new piece, in parallel; pieces worn before reuse theirs), then lays them out
+ * as the outfit's background-free "look". Returns the look's path, or null if
+ * it couldn't be made (never throws: the outfit is already saved).
  */
 export async function makeOutfitLook(supabase: SupabaseClient, outfitId: string): Promise<string | null> {
   const { data: outfit } = await supabase
     .from("outfits")
-    .select("id, user_id, photo_path, outfit_items(wardrobe_items(name, category, description))")
+    .select("id, user_id, photo_path, outfit_items(wardrobe_items(*))")
     .eq("id", outfitId)
     .single();
   if (!outfit) return null;
@@ -45,29 +166,24 @@ export async function makeOutfitLook(supabase: SupabaseClient, outfitId: string)
   try {
     const pieces = ((outfit.outfit_items ?? []) as unknown as { wardrobe_items: Piece | null }[])
       .map((l) => l.wardrobe_items)
-      .filter((p): p is Piece => Boolean(p));
+      .filter((p): p is Piece => Boolean(p))
+      .sort((a, b) => ORDER.indexOf(a.category) - ORDER.indexOf(b.category));
     if (pieces.length === 0) throw new Error("No pieces to draw");
 
     const { data: file, error: downloadError } = await supabase.storage.from(PHOTO_BUCKET).download(outfit.photo_path);
     if (downloadError || !file) throw new Error("Could not read the outfit photo");
+    const photo = { data: Buffer.from(await file.arrayBuffer()), type: file.type || "image/jpeg" };
 
-    const result = await new OpenAI().images.edit({
-      model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-2.5-flare",
-      image: await toFile(Buffer.from(await file.arrayBuffer()), "outfit.jpg", { type: file.type || "image/jpeg" }),
-      prompt: lookPrompt(pieces),
-      background: "transparent",
-      output_format: "webp",
-      // High quality keeps fabric, buttons and shades closer to the photo.
-      quality: "high",
-      size: "1024x1536",
-    });
-    const b64 = result.data?.[0]?.b64_json;
-    if (!b64) throw new Error("The image model returned no image");
+    const openai = new OpenAI({ maxRetries: 4 });
+    const shots = (await mapLimit(pieces, 3, (p) => productShot(supabase, openai, outfit.user_id, photo, p))).filter(
+      (s): s is Buffer => Boolean(s),
+    );
+    if (shots.length === 0) throw new Error("No piece could be drawn");
 
     const path = `${outfit.user_id}/looks/${outfitId}-${crypto.randomUUID().slice(0, 8)}.webp`;
     const { error: uploadError } = await supabase.storage
       .from(PHOTO_BUCKET)
-      .upload(path, Buffer.from(b64, "base64"), { contentType: "image/webp" });
+      .upload(path, await composeLook(shots), { contentType: "image/webp" });
     if (uploadError) throw new Error(`Could not save the look: ${uploadError.message}`);
 
     const { data: previous } = await supabase.from("outfits").select("look_path").eq("id", outfitId).single();

@@ -48,10 +48,10 @@ export function currentStreak(days: string[], today: string) {
   return streak;
 }
 
-/** Every file under the user's folder (photos, cut-outs, looks). */
+/** Every file under the user's folder (photos, cut-outs, product shots, looks). */
 export async function listUserFiles(supabase: SupabaseClient, userId: string) {
   const files: string[] = [];
-  const folders = [userId, `${userId}/cutouts`, `${userId}/looks`];
+  const folders = [userId, `${userId}/cutouts`, `${userId}/products`, `${userId}/looks`];
   for (const folder of folders) {
     for (let offset = 0; ; offset += 1000) {
       const { data } = await supabase.storage.from(PHOTO_BUCKET).list(folder, { limit: 1000, offset });

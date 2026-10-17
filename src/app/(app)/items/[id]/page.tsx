@@ -10,6 +10,7 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { WornAgo } from "@/components/WornAgo";
 import { swatch } from "@/lib/colors";
 import { dateParts, signPhotos } from "@/lib/photos";
+import { isProductShot } from "@/lib/outfit-look";
 import { withCoverPhotos } from "@/lib/queries";
 import { getUser } from "@/lib/supabase/server";
 import { CATEGORIES, CATEGORY_LABELS, type Box, type Outfit, type WardrobeItem } from "@/lib/types";
@@ -74,7 +75,8 @@ async function ItemDetail(props: PageProps<"/items/[id]">) {
             className="mirror mx-auto w-4/5"
           />
         </ViewTransition>
-        {item.photo && item.cover_box && (
+        {/* OpenAI product shots are already exact; the free cut-out would be a step down. */}
+        {item.photo && item.cover_box && !isProductShot(item.cutout_path) && (
           <CutoutButton action={makeCutout.bind(null, item.id)} hasCutout={Boolean(item.cutoutUrl)} />
         )}
       </div>

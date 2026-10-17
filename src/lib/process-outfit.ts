@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { analyzeOutfitPhoto, keepVisibleItems, normalizeBox, type KnownItem } from "./analyze";
+import { removePieces, unlinkedPieces } from "./delete-outfit";
 import { PHOTO_BUCKET } from "./photos";
 import { saveCutouts, type CutoutTarget } from "./save-cutouts";
 import type { Category } from "./types";
@@ -44,6 +45,8 @@ export async function processOutfit(supabase: SupabaseClient, outfitId: string) 
     }
 
     // A re-scan replaces this outfit's previous links.
+    const { data: previousLinks } = await supabase.from("outfit_items").select("item_id").eq("outfit_id", outfitId);
+    const previousIds = (previousLinks ?? []).map((l) => l.item_id as string);
     await supabase.from("outfit_items").delete().eq("outfit_id", outfitId);
 
     const usedIds = new Set<string>();
@@ -92,6 +95,10 @@ export async function processOutfit(supabase: SupabaseClient, outfitId: string) 
 
     const { error: linkError } = await supabase.from("outfit_items").insert(links);
     if (linkError) throw new OutfitError(`Could not save outfit items: ${linkError.message}`);
+
+    // Pieces an earlier scan found but this one didn't, if no other outfit has them.
+    const dropped = previousIds.filter((id) => !usedIds.has(id));
+    await removePieces(supabase, await unlinkedPieces(supabase, dropped));
 
     await supabase.from("outfits").update({ status: "done", error: null }).eq("id", outfitId);
 

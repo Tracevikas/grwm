@@ -1,9 +1,29 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { PHOTO_BUCKET } from "./photos";
 
+/** Of these pieces, the ones no outfit links to any more. */
+export async function unlinkedPieces(supabase: SupabaseClient, itemIds: string[]) {
+  const orphans: string[] = [];
+  for (const itemId of itemIds) {
+    const { data } = await supabase.from("outfit_items").select("outfit_id").eq("item_id", itemId).limit(1);
+    if (!data?.length) orphans.push(itemId);
+  }
+  return orphans;
+}
+
+/** Deletes pieces and their stored images (cut-outs and product shots). */
+export async function removePieces(supabase: SupabaseClient, itemIds: string[]) {
+  if (itemIds.length === 0) return 0;
+  const { data: rows } = await supabase.from("wardrobe_items").select("*").in("id", itemIds);
+  const files = (rows ?? []).map((r) => r.cutout_path as string | null).filter(Boolean) as string[];
+  await supabase.from("wardrobe_items").delete().in("id", itemIds);
+  if (files.length > 0) await supabase.storage.from(PHOTO_BUCKET).remove(files);
+  return itemIds.length;
+}
+
 /**
  * Deletes an outfit and tidies the wardrobe after it: pieces that only ever
- * appeared in this outfit are removed (with their cut-outs), and pieces worn in
+ * appeared in this outfit are removed (with their images), and pieces worn in
  * other outfits take their cover photo from one of those instead.
  */
 export async function deleteOutfitAndOrphans(supabase: SupabaseClient, outfitId: string) {
@@ -35,13 +55,9 @@ export async function deleteOutfitAndOrphans(supabase: SupabaseClient, outfitId:
       .is("cover_outfit_id", null);
   }
 
+  const removedPieces = await removePieces(supabase, orphans);
   const files = [outfit.photo_path, outfit.look_path].filter(Boolean) as string[];
-  if (orphans.length > 0) {
-    const { data: rows } = await supabase.from("wardrobe_items").select("*").in("id", orphans);
-    for (const row of rows ?? []) if (row.cutout_path) files.push(row.cutout_path as string);
-    await supabase.from("wardrobe_items").delete().in("id", orphans);
-  }
   if (files.length > 0) await supabase.storage.from(PHOTO_BUCKET).remove(files);
 
-  return { removedPieces: orphans.length };
+  return { removedPieces };
 }

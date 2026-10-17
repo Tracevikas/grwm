@@ -205,6 +205,27 @@ describe("processOutfit", () => {
     await expect(processOutfit(client as never, "o1")).rejects.toMatchObject({ status: 422 });
   });
 
+  it("on re-scan, deletes pieces it no longer finds if no other outfit has them", async () => {
+    const { client, calls } = setup({
+      override: (c) => {
+        const eq = (col: string) => c.filters.find(([op, k]) => op === "eq" && k === col)?.[2];
+        if (c.table === "outfit_items" && c.action === "select" && eq("outfit_id") === "o1") {
+          return { data: [{ item_id: "old-pocket-square" }, { item_id: "jeans" }] };
+        }
+        if (c.table === "outfit_items" && c.action === "select" && eq("item_id")) return { data: [] };
+        if (c.table === "wardrobe_items" && c.filters.some(([op, k]) => op === "in" && k === "id") && c.action === "select" && !c.filters.some(([op]) => op === "is")) {
+          return { data: [{ id: "old-pocket-square", cutout_path: "u1/cutouts/sq.webp" }] };
+        }
+        return undefined;
+      },
+    });
+    analyzeOutfitPhoto.mockResolvedValue({ has_person_outfit: true, items: [detected({ existing_item_id: "jeans", category: "bottom" })] });
+
+    await processOutfit(client as never, "o1");
+    const [del] = callsTo(calls, "wardrobe_items", "delete");
+    expect(del.filters).toContainEqual(["in", "id", ["old-pocket-square"]]);
+  });
+
   it("clears previous links before saving, so a re-scan replaces them", async () => {
     const { client, calls } = setup();
     analyzeOutfitPhoto.mockResolvedValue({ has_person_outfit: true, items: [detected()] });

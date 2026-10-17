@@ -1,3 +1,5 @@
+// @vitest-environment node
+import sharp from "sharp";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { callsTo, fakeSupabase, type Call, type Result } from "./fake-supabase";
 
@@ -9,96 +11,112 @@ vi.mock("openai", async (orig) => ({
   },
 }));
 
-import { lookPrompt, makeOutfitLook } from "@/lib/outfit-look";
+import { composeLook, isProductShot, makeOutfitLook, piecePrompt } from "@/lib/outfit-look";
 
-const OUTFIT = {
-  id: "o1",
-  user_id: "u1",
-  photo_path: "u1/photo.jpg",
-  outfit_items: [
-    { wardrobe_items: { name: "Navy oxford shirt", category: "top" } },
-    { wardrobe_items: { name: "Light-wash jeans", category: "bottom" } },
-  ],
-};
+/** A small opaque PNG standing in for a generated product shot. */
+const png = (w = 40, h = 60) =>
+  sharp({ create: { width: w, height: h, channels: 4, background: { r: 200, g: 180, b: 150, alpha: 1 } } }).png().toBuffer();
 
-function setup(override?: (c: Call) => Result | undefined, previousLook: string | null = null) {
-  return fakeSupabase((call) => {
+const SHIRT = { id: "shirt", name: "Black button-up shirt", category: "top", description: "Point collar", cutout_path: "u1/cutouts/shirt.webp" };
+const BLAZER = { id: "blazer", name: "Beige blazer", category: "outerwear", description: "Pocket square in pocket", cutout_path: null };
+
+function setup(pieces: object[], override?: (c: Call) => Result | undefined) {
+  const fake = fakeSupabase((call) => {
     const custom = override?.(call);
     if (custom) return custom;
     if (call.table !== "outfits" || call.action !== "select") return undefined;
-    // First select loads the outfit; the later one reads the previous look path.
-    return { data: { ...OUTFIT, look_path: previousLook } };
+    return {
+      data: { id: "o1", user_id: "u1", photo_path: "u1/photo.jpg", look_path: null, outfit_items: pieces.map((p) => ({ wardrobe_items: p })) },
+    };
   });
+  // Stored product shots and cut-outs are real images.
+  fake.storage.download.mockImplementation(async () => ({ data: new Blob([new Uint8Array(PIECE_PNG)], { type: "image/png" }), error: null }));
+  return fake;
 }
+
+let PIECE_PNG: Buffer;
 
 const statuses = (calls: Call[]) =>
   callsTo(calls, "outfits", "update").map((c) => (c.payload as { look_status?: string }).look_status);
 
 describe("makeOutfitLook", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     edit.mockReset();
-    edit.mockResolvedValue({ data: [{ b64_json: Buffer.from("webp-bytes").toString("base64") }] });
+    PIECE_PNG = await png();
+    const b64 = PIECE_PNG.toString("base64");
+    edit.mockResolvedValue({ data: [{ b64_json: b64 }] });
     vi.spyOn(console, "warn").mockImplementation(() => {});
     vi.unstubAllEnvs();
   });
 
-  it("asks the image model for a transparent flat-lay of the photo", async () => {
-    const { client } = setup();
+  it("asks the image model for one transparent product shot per piece", async () => {
+    const { client } = setup([SHIRT, BLAZER]);
     await makeOutfitLook(client as never, "o1");
 
-    const req = edit.mock.calls[0][0];
-    expect(req).toMatchObject({ model: "gpt-image-2.5-flare", background: "transparent", output_format: "webp", quality: "high", size: "1024x1536" });
-    expect(req.image).toBeInstanceOf(File);
-    expect(req.prompt).toContain("1. Navy oxford shirt (top)");
-    expect(req.prompt).toContain("2. Light-wash jeans (bottom)");
-    expect(req.prompt).toMatch(/Remove the person completely/);
+    expect(edit).toHaveBeenCalledTimes(2);
+    const prompts = edit.mock.calls.map((c) => c[0].prompt as string);
+    expect(prompts.some((p) => p.includes("Beige blazer (outerwear): Pocket square in pocket"))).toBe(true);
+    expect(prompts.some((p) => p.includes("Black button-up shirt (top): Point collar"))).toBe(true);
+    for (const [req] of edit.mock.calls) {
+      expect(req).toMatchObject({ model: "gpt-image-2.5-flare", background: "transparent", quality: "high" });
+      expect(req.image).toBeInstanceOf(File);
+    }
+    // Tall garments get a portrait canvas.
+    expect(edit.mock.calls.find((c) => c[0].prompt.includes("blazer"))![0].size).toBe("1024x1536");
+    expect(edit.mock.calls.find((c) => c[0].prompt.includes("shirt"))![0].size).toBe("1024x1024");
   });
 
-  it("uses OPENAI_IMAGE_MODEL when set", async () => {
-    vi.stubEnv("OPENAI_IMAGE_MODEL", "gpt-image-2");
-    const { client } = setup();
+  it("saves each shot as the piece's image, replacing its old cut-out", async () => {
+    const { client, calls, storage } = setup([SHIRT]);
     await makeOutfitLook(client as never, "o1");
-    expect(edit.mock.calls[0][0].model).toBe("gpt-image-2");
+
+    const uploads = storage.upload.mock.calls.map((c) => (c as unknown as [string])[0]);
+    const product = uploads.find((p) => p.includes("/products/"))!;
+    expect(product).toMatch(/^u1\/products\/shirt-[0-9a-f]{8}\.webp$/);
+    const [update] = callsTo(calls, "wardrobe_items", "update");
+    expect(update.payload).toEqual({ cutout_path: product });
+    expect(storage.remove).toHaveBeenCalledWith(["u1/cutouts/shirt.webp"]);
   });
 
-  it("stores the image under the user's looks folder and marks it done", async () => {
-    const { client, calls, storage } = setup();
-    await expect(makeOutfitLook(client as never, "o1")).resolves.toMatch(/^u1\/looks\/o1-[0-9a-f]{8}\.webp$/);
+  it("reuses a piece's existing product shot instead of paying for a new one", async () => {
+    const { client } = setup([{ ...SHIRT, cutout_path: "u1/products/shirt-old.webp" }]);
+    await expect(makeOutfitLook(client as never, "o1")).resolves.toMatch(/^u1\/looks\/o1-/);
+    expect(edit).not.toHaveBeenCalled();
+  });
 
-    const [path, body, opts] = storage.upload.mock.calls[0] as unknown as [string, Buffer, object];
+  it("stores the composed look and marks it done", async () => {
+    const { client, calls, storage } = setup([SHIRT, BLAZER]);
+    const path = await makeOutfitLook(client as never, "o1");
+
     expect(path).toMatch(/^u1\/looks\/o1-[0-9a-f]{8}\.webp$/);
-    expect(body.toString()).toBe("webp-bytes");
-    expect(opts).toEqual({ contentType: "image/webp" });
-
+    const look = storage.upload.mock.calls.find((c) => (c as unknown as [string])[0] === path) as unknown as [string, Buffer];
+    expect((await sharp(look[1]).metadata()).format).toBe("webp");
     expect(statuses(calls)).toEqual(["pending", "done"]);
-    const done = callsTo(calls, "outfits", "update").at(-1)!;
-    expect(done.payload).toEqual({ look_path: path, look_status: "done" });
   });
 
-  it("replaces an earlier look and deletes its file", async () => {
-    const { client, storage } = setup(undefined, "u1/looks/o1-old.webp");
-    await makeOutfitLook(client as never, "o1");
-    expect(storage.remove).toHaveBeenCalledWith(["u1/looks/o1-old.webp"]);
-  });
-
-  it("marks the look failed (but doesn't throw) when the model errors", async () => {
+  it("falls back to the cut-out when a piece can't be generated", async () => {
     edit.mockImplementation(async () => {
       throw new Error("content policy");
     });
-    const { client, calls } = setup();
-    await expect(makeOutfitLook(client as never, "o1")).resolves.toBeNull();
-    expect(statuses(calls)).toEqual(["pending", "failed"]);
+    const { client, calls } = setup([SHIRT]);
+    await expect(makeOutfitLook(client as never, "o1")).resolves.toMatch(/^u1\/looks\//);
+    expect(callsTo(calls, "wardrobe_items", "update")).toHaveLength(0);
   });
 
-  it("marks it failed when the model returns no image", async () => {
-    edit.mockResolvedValue({ data: [] });
-    const { client, calls } = setup();
+  it("marks the look failed (without throwing) when no piece could be drawn", async () => {
+    edit.mockImplementation(async () => {
+      throw new Error("rate limited");
+    });
+    const { client, calls, storage } = setup([BLAZER]);
+    storage.download.mockImplementation(async (path?: unknown) =>
+      path === "u1/photo.jpg" ? { data: new Blob([new Uint8Array([1])], { type: "image/jpeg" }), error: null } : ({ data: null, error: { message: "nope" } } as never),
+    );
     await expect(makeOutfitLook(client as never, "o1")).resolves.toBeNull();
     expect(statuses(calls)).toEqual(["pending", "failed"]);
   });
 
   it("skips quietly when the database hasn't been migrated", async () => {
-    const { client } = setup((c) => (c.action === "update" ? { error: { message: "column look_status does not exist" } } : undefined));
+    const { client } = setup([SHIRT], (c) => (c.table === "outfits" && c.action === "update" ? { error: { message: "column look_status does not exist" } } : undefined));
     await expect(makeOutfitLook(client as never, "o1")).resolves.toBeNull();
     expect(edit).not.toHaveBeenCalled();
   });
@@ -110,35 +128,40 @@ describe("makeOutfitLook", () => {
   });
 });
 
-describe("lookPrompt", () => {
-  // The waist-up blazer photo: only these two may appear, no invented trousers.
-  const p = lookPrompt([
-    { name: "Beige suit blazer", category: "outerwear", description: "Single-breasted, notch lapels, pocket square in breast pocket" },
-    { name: "Black button-up shirt", category: "top" },
-  ]);
+describe("piecePrompt", () => {
+  const p = piecePrompt({ name: "Beige suit blazer", category: "outerwear", description: "Notch lapels, pocket square in breast pocket" });
 
-  it("asks for exactly the listed pieces, numbered, with their details", () => {
-    expect(p).toContain("Show EXACTLY these 2 pieces and nothing else");
-    expect(p).toContain("1. Beige suit blazer (outerwear): Single-breasted, notch lapels, pocket square in breast pocket");
-    expect(p).toContain("2. Black button-up shirt (top)");
+  it("asks for only this one item, copied exactly", () => {
+    expect(p).toContain("Extract ONLY this one item");
+    expect(p).toContain("Beige suit blazer (outerwear): Notch lapels, pocket square in breast pocket");
+    expect(p).toMatch(/Copy it exactly from the photo/);
   });
 
-  it("forbids adding pieces that aren't listed, like trousers or shoes", () => {
-    expect(p).toMatch(/Do not add any garment or accessory that is not listed: no trousers/);
-    expect(p).toMatch(/Never invent the parts of the outfit that are out of frame/);
+  it("forbids other garments, the person and the background", () => {
+    expect(p).toMatch(/no other garments or accessories, no person/);
+    expect(p).toMatch(/no background/);
+    expect(p).toMatch(/a pocket square stays in the blazer pocket/);
+  });
+});
+
+describe("composeLook", () => {
+  it("puts two pieces side by side on a transparent canvas", async () => {
+    const look = await composeLook([await png(), await png()]);
+    const m = await sharp(look).metadata();
+    expect([m.width, m.height]).toEqual([1024, 666]);
+    expect(m.hasAlpha).toBe(true);
   });
 
-  it("keeps attached details on their garment and removes person and background", () => {
-    expect(p).toMatch(/a pocket square stays in the blazer pocket, not as a separate item/);
-    expect(p).toMatch(/Remove the person completely/);
-    expect(p).toMatch(/Remove the background completely/);
+  it("adds rows for more pieces and centres a single one", async () => {
+    const three = await sharp(await composeLook([await png(), await png(), await png()])).metadata();
+    expect(three.height).toBe(666 * 2);
+    const one = await sharp(await composeLook([await png()])).metadata();
+    expect([one.width, one.height]).toEqual([1024, 1331]);
   });
+});
 
-  it("doesn't nudge the model toward a full top-to-bottom outfit", () => {
-    expect(p).not.toMatch(/bottoms below|shoes at the bottom/);
-  });
-
-  it("uses singular wording for one piece", () => {
-    expect(lookPrompt([{ name: "Kurta", category: "top" }])).toContain("Show EXACTLY these 1 piece");
-  });
+it("tells product shots from segmentation cut-outs", () => {
+  expect(isProductShot("u1/products/a.webp")).toBe(true);
+  expect(isProductShot("u1/cutouts/a.webp")).toBe(false);
+  expect(isProductShot(null)).toBe(false);
 });
