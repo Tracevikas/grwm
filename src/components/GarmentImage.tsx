@@ -29,7 +29,7 @@ export function GarmentImage({ cutoutUrl, photoUrl, box, photoW, photoH, alt, cl
         src={cutoutUrl}
         alt={alt}
         loading="lazy"
-        className="h-[84%] w-[84%] object-contain drop-shadow-[0_10px_14px_rgba(43,30,23,0.18)]"
+        className="h-[84%] w-[84%] object-contain drop-shadow-[0_10px_14px_rgba(80,60,120,0.18)]"
       />
     </div>
   );

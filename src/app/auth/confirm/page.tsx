@@ -45,7 +45,7 @@ export default function ConfirmPage() {
           <div className="mt-6 space-y-4" role="alert">
             <p className="text-lg font-semibold">{problem}</p>
             <p className="text-muted">Links work once and expire after an hour. Send yourself a new one.</p>
-            <Link href="/login" className="inline-flex h-12 items-center rounded-full bg-foreground px-6 font-semibold text-background">
+            <Link href="/login" className="inline-flex h-12 items-center rounded-full bg-accent px-6 font-semibold text-accent-ink">
               Back to sign in
             </Link>
           </div>

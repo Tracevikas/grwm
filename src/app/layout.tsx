@@ -1,17 +1,11 @@
 import type { Metadata, Viewport } from "next";
-import { Bricolage_Grotesque, Geist } from "next/font/google";
+import { Inter } from "next/font/google";
 import { ServiceWorker } from "@/components/ServiceWorker";
 import "./globals.css";
 
-const geistSans = Geist({
+const inter = Inter({
   variable: "--font-geist-sans",
   subsets: ["latin"],
-});
-
-const display = Bricolage_Grotesque({
-  variable: "--font-display",
-  subsets: ["latin"],
-  axes: ["opsz", "wdth"],
 });
 
 export const metadata: Metadata = {
@@ -21,15 +15,12 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f5f0ea" },
-    { media: "(prefers-color-scheme: dark)", color: "#1a1411" },
-  ],
+  themeColor: "#f6f3fb",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${display.variable} h-full antialiased`}>
+    <html lang="en" className={`${inter.variable} h-full antialiased`}>
       <body className="min-h-full font-sans">
         {children}
         <ServiceWorker />

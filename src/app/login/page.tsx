@@ -26,7 +26,7 @@ export default function LoginPage() {
           <div className="absolute left-[18%] top-[14%] h-[22%] w-[10%] -rotate-12 rounded-full bg-white/40 blur-[2px]" />
           <div className="sheen absolute -inset-y-1/4 left-0 w-1/3 bg-gradient-to-r from-transparent via-white/50 to-transparent" aria-hidden />
         </div>
-        <h1 className="display rise absolute inset-x-0 bottom-[8%] text-center text-[3.3rem] font-extrabold text-accent-ink">
+        <h1 className="display rise absolute inset-x-0 bottom-[8%] text-center text-[2.8rem] font-extrabold text-accent-ink">
           get ready
           <br />
           with me
@@ -119,7 +119,7 @@ function SignIn({ linkError }: { linkError: string | null }) {
             )}
             <button
               disabled={sending}
-              className="flex h-14 w-full items-center justify-center gap-2 rounded-full bg-foreground text-base font-semibold text-background transition active:scale-[0.99] disabled:opacity-70"
+              className="flex h-14 w-full items-center justify-center gap-2 rounded-full bg-accent text-base font-semibold text-accent-ink transition active:scale-[0.99] disabled:opacity-70"
             >
               {sending && <Spinner />}
               {sending ? "Sending link…" : "Email me a sign-in link"}
@@ -211,7 +211,7 @@ function LinkSent({ email, send, sending, sendError, verify, verifying, verifyEr
           )}
           <button
             disabled={verifying}
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground font-semibold text-background transition active:scale-[0.99] disabled:opacity-70"
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-accent font-semibold text-accent-ink transition active:scale-[0.99] disabled:opacity-70"
           >
             {verifying && <Spinner />}
             {verifying ? "Checking…" : "Sign in with code"}

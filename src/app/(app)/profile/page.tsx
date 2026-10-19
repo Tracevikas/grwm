@@ -51,7 +51,7 @@ async function Profile() {
       <header className="rise flex items-center gap-4">
         <Avatar name={me.name} url={me.avatarUrl} className="h-20 w-20 text-2xl" />
         <div className="min-w-0">
-          <h1 className="display truncate text-4xl font-bold">{me.name}</h1>
+          <h1 className="truncate text-2xl font-semibold tracking-tight">{me.name}</h1>
           <p className="truncate text-muted">{me.email}</p>
           <p className="mt-0.5 text-xs text-muted">
             Signed in with {me.provider === "google" ? "Google" : "an email link"}. Member since {joined}.

@@ -25,7 +25,7 @@ export function ItemCard({ item, index = 0 }: { item: ItemWithPhoto; index?: num
             photoH={item.photo?.h ?? 1}
             alt={item.name}
             aspect="aspect-[4/5]"
-            className="rounded-[1.4rem] transition-shadow duration-200 group-hover:shadow-[0_14px_28px_-18px_rgba(43,30,23,0.45)]"
+            className="rounded-[1.4rem] transition-shadow duration-200 group-hover:shadow-[0_14px_28px_-18px_rgba(80,60,120,0.45)]"
           />
         </ViewTransition>
         <span className="absolute left-2.5 top-2.5 flex -space-x-1">

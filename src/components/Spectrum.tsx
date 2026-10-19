@@ -24,7 +24,7 @@ export function Spectrum({ bands, selected, hrefFor }: Props) {
               aria-label={`${band.color}, ${band.count} ${band.count === 1 ? "piece" : "pieces"}`}
               aria-current={isSelected ? "true" : undefined}
               style={{ flexGrow: band.count, background: band.swatch, "--i": i } as React.CSSProperties}
-              className={`grow-up min-w-3 basis-0 shadow-[inset_0_0_0_1px_rgba(43,30,23,0.08)] transition-[flex-grow,opacity,filter] duration-300 hover:brightness-110 active:brightness-95 ${
+              className={`grow-up min-w-3 basis-0 shadow-[inset_0_0_0_1px_rgba(80,60,120,0.08)] transition-[flex-grow,opacity,filter] duration-300 hover:brightness-110 active:brightness-95 ${
                 selected && !isSelected ? "opacity-25" : ""
               }`}
             />

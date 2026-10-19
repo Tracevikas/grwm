@@ -1,36 +1,20 @@
 @import "tailwindcss";
 
-/* Mocha & butter: oat, espresso, and a butter-yellow accent. */
+/* Pastel glass: lavender-to-pink accent on frosted white over a soft gradient. */
 :root {
-  --background: #f5f0ea; /* oat */
-  --surface: #ffffff;
-  --surface-2: #ebe3d8;
-  --foreground: #2b1e17; /* espresso */
-  --muted: #7a6a5e;
-  --line: #e2d8cc;
-  --accent: #f2c14e; /* butter: fills only, always with espresso on top */
-  --accent-ink: #2b1e17;
-  --accent-strong: #94650f; /* butter deepened for text and focus rings on oat */
-  --danger: #b4432f;
-  --nav: #2b1e17;
-  --nav-ink: #f5ede3;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #1a1411;
-    --surface: #251d18;
-    --surface-2: #32281f;
-    --foreground: #f5ede3;
-    --muted: #a8998b;
-    --line: #3a2f27;
-    --accent: #f2c14e;
-    --accent-ink: #2b1e17;
-    --accent-strong: #f2c14e;
-    --danger: #f08a6e;
-    --nav: #f5ede3;
-    --nav-ink: #2b1e17;
-  }
+  --background: #f6f3fb; /* lilac mist */
+  --surface: #ffffffb8; /* frosted glass, blurred by [class*="bg-surface"] below */
+  --surface-2: #efeaf7;
+  --foreground: #3b3a4a; /* ink */
+  --muted: #8b8a9c;
+  --line: #46375f1a;
+  --accent: #a78bd0; /* lavender: fills carry the lavender→pink gradient, white on top */
+  --accent-2: #f0aecb; /* blush */
+  --accent-ink: #ffffff;
+  --accent-strong: #8b6cc0; /* lavender deepened for text and focus rings */
+  --danger: #c2456a;
+  --nav: #ffffffe6;
+  --nav-ink: #3b3a4a;
 }
 
 @theme inline {
@@ -47,19 +31,52 @@
   --color-nav: var(--nav);
   --color-nav-ink: var(--nav-ink);
   --font-sans: var(--font-geist-sans);
-  --font-display: var(--font-display);
+  --font-display: var(--font-sans);
   --radius-mirror: 999px 999px 1.75rem 1.75rem;
 }
 
 :root {
-  /* Native controls (date picker, scrollbars) follow the theme. */
-  color-scheme: light dark;
+  color-scheme: light;
+}
+
+html {
+  background: var(--background);
 }
 
 body {
-  background: var(--background);
   color: var(--foreground);
+  min-height: 100dvh;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Soft lavender, blush and mint glows behind everything. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-color: var(--background);
+  background-image:
+    radial-gradient(900px 680px at 6% 0, #c5b8f780, #0000 55%),
+    radial-gradient(820px 640px at 96% 8%, #ffcde080, #0000 55%),
+    radial-gradient(900px 760px at 92% 98%, #bee9d880, #0000 55%),
+    linear-gradient(150deg, #f1ecfb 0%, #fbf0f5 55%, #edf7f2 100%);
+}
+
+/* Every surface is frosted glass. */
+[class*="bg-surface"] {
+  -webkit-backdrop-filter: blur(16px) saturate(135%);
+  backdrop-filter: blur(16px) saturate(135%);
+}
+
+/* Accent fills sweep lavender to blush. */
+.bg-accent {
+  background-image: linear-gradient(135deg, #b8a4e8, var(--accent-2));
+}
+
+::selection {
+  background: var(--accent);
+  color: #fff;
 }
 
 :focus-visible {
@@ -75,9 +92,8 @@ body {
 
 .display {
   font-family: var(--font-display);
-  font-variation-settings: "wdth" 85;
-  letter-spacing: -0.035em;
-  line-height: 0.92;
+  letter-spacing: -0.03em;
+  line-height: 1;
 }
 
 /* Scan line that sweeps the mirror while the AI reads the photo. */

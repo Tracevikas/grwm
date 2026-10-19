@@ -44,7 +44,7 @@ export function NameForm({ name }: { name: string }) {
           autoComplete="name"
           className="h-12 min-w-0 flex-1 rounded-xl bg-background px-3.5 outline-none focus:ring-2 focus:ring-accent-strong"
         />
-        <SubmitButton pendingLabel="Saving…" className="h-12 shrink-0 rounded-full bg-foreground px-5 font-semibold text-background">
+        <SubmitButton pendingLabel="Saving…" className="h-12 shrink-0 rounded-full bg-accent px-5 font-semibold text-accent-ink">
           Save
         </SubmitButton>
       </div>

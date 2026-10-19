@@ -55,12 +55,12 @@ export function WardrobeView({ total, items, bands, filters, me }: Props) {
 
       <InstallPrompt />
 
-      <h1 className="display rise text-[5.5rem] font-bold">
-        <CountUp value={total} />{" "}
-        <span className="align-baseline text-[2rem] font-semibold tracking-tight text-muted">
-          {total === 1 ? "piece" : "pieces"}
-        </span>
-      </h1>
+      <div className="rise">
+        <h1 className="text-2xl font-semibold tracking-tight">Your wardrobe</h1>
+        <p className="mt-1 text-sm text-muted">
+          <CountUp value={total} /> {total === 1 ? "piece" : "pieces"} · everything you own, in one place
+        </p>
+      </div>
 
       {total === 0 ? (
         <EmptyWardrobe />
@@ -140,7 +140,7 @@ function Tab({ href, active, children }: { href: string; active: boolean; childr
       href={href}
       aria-current={active ? "true" : undefined}
       className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium transition ${
-        active ? "bg-foreground text-background" : "bg-surface text-foreground hover:bg-surface-2"
+        active ? "bg-accent text-accent-ink" : "bg-surface text-foreground hover:bg-surface-2"
       }`}
     >
       {children}
@@ -150,19 +150,17 @@ function Tab({ href, active, children }: { href: string; active: boolean; childr
 
 function EmptyWardrobe() {
   return (
-    <div className="grid grid-cols-[7rem_1fr] items-center gap-5">
-      <div className="mirror flex aspect-[3/4] items-end justify-center border-2 border-dashed border-line bg-surface/60 pb-4">
-        <span className="h-8 w-8 rounded-full bg-accent" aria-hidden />
-      </div>
-      <div>
-        <p className="text-lg font-semibold leading-snug">Your wardrobe fills itself.</p>
-        <p className="mt-1 text-sm text-muted">
-          Take a mirror photo of today&apos;s outfit and every piece you&apos;re wearing is saved here.
-        </p>
-        <Link href="/log" className="mt-4 inline-flex h-11 items-center rounded-full bg-accent px-5 text-sm font-semibold text-accent-ink">
-          Log today&apos;s outfit
-        </Link>
-      </div>
+    <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-line bg-surface/60 px-6 py-16 text-center">
+      <p className="text-lg font-semibold">Your wardrobe is empty</p>
+      <p className="mt-1 max-w-sm text-sm text-muted">
+        Take a mirror photo of today&apos;s outfit and every piece you&apos;re wearing is saved here.
+      </p>
+      <Link
+        href="/log"
+        className="mt-6 inline-flex items-center rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-accent-ink shadow-sm shadow-accent/30 transition hover:opacity-90 active:opacity-80"
+      >
+        Log today&apos;s outfit
+      </Link>
     </div>
   );
 }

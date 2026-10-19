@@ -43,7 +43,7 @@ export function OutfitViewer({ photoUrl, lookUrl, lookStatus }: Props) {
           key={showLook ? "look" : "photo"}
           src={showLook ? lookUrl : photoUrl}
           alt={showLook ? "Your outfit, laid out on its own" : "Outfit photo"}
-          className={`view-in h-full w-full ${showLook ? "object-contain p-[8%] drop-shadow-[0_18px_22px_rgba(43,30,23,0.2)]" : "object-cover"}`}
+          className={`view-in h-full w-full ${showLook ? "object-contain p-[8%] drop-shadow-[0_18px_22px_rgba(80,60,120,0.2)]" : "object-cover"}`}
         />
       </div>
 
@@ -56,7 +56,7 @@ export function OutfitViewer({ photoUrl, lookUrl, lookStatus }: Props) {
               role="tab"
               aria-selected={view === v}
               onClick={() => setView(v)}
-              className={`h-9 rounded-full px-4 text-sm font-semibold transition-colors ${view === v ? "bg-foreground text-background" : "text-muted"}`}
+              className={`h-9 rounded-full px-4 text-sm font-semibold transition-colors ${view === v ? "bg-accent text-accent-ink" : "text-muted"}`}
             >
               {v === "look" ? "Clean look" : "Photo"}
             </button>

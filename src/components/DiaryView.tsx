@@ -24,7 +24,7 @@ export function DiaryView({ outfits, me }: Props) {
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
-        <h1 className="display text-6xl font-bold">Diary</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Diary</h1>
         {me && <ProfileLink name={me.name} avatarUrl={me.avatarUrl} />}
       </div>
 
@@ -86,7 +86,7 @@ function DiaryTile({ outfit: o, index }: { outfit: DiaryEntry; index: number }) 
           </span>
         </div>
         {o.status !== "done" && (
-          <span className="absolute left-1/2 top-[22%] -translate-x-1/2 whitespace-nowrap rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-[#2b1e17]">
+          <span className="absolute left-1/2 top-[22%] -translate-x-1/2 whitespace-nowrap rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-[#3b3a4a]">
             {o.status === "processing" ? "Reading photo…" : "Needs a re-scan"}
           </span>
         )}

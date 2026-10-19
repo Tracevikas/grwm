@@ -82,7 +82,7 @@ async function ItemDetail(props: PageProps<"/items/[id]">) {
       </div>
 
       <header className="space-y-3">
-        <h1 className="display text-5xl font-bold">{item.name}</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{item.name}</h1>
         <div className="flex flex-wrap gap-1.5">
           {item.colors.map((c) => (
             <span key={c} className="inline-flex items-center gap-1.5 rounded-full bg-surface py-1 pl-1 pr-3 text-sm capitalize">
@@ -170,7 +170,7 @@ async function ItemDetail(props: PageProps<"/items/[id]">) {
               Notes
               <textarea name="description" defaultValue={item.description ?? ""} rows={3} className={`${field} mt-1 h-auto py-3 text-foreground`} />
             </label>
-            <SubmitButton pendingLabel="Saving…" className="h-12 w-full rounded-full bg-foreground font-semibold text-background">
+            <SubmitButton pendingLabel="Saving…" className="h-12 w-full rounded-full bg-accent font-semibold text-accent-ink">
               Save changes
             </SubmitButton>
           </form>
@@ -189,7 +189,7 @@ async function ItemDetail(props: PageProps<"/items/[id]">) {
                   <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
               </select>
-              <SubmitButton pendingLabel="Merging…" className="h-12 w-full rounded-full bg-foreground font-semibold text-background">
+              <SubmitButton pendingLabel="Merging…" className="h-12 w-full rounded-full bg-accent font-semibold text-accent-ink">
                 Merge into this piece
               </SubmitButton>
             </form>

@@ -137,7 +137,7 @@ export default function LogOutfitPage() {
   return (
     <DirectionalPage>
       <div className="space-y-6">
-        <h1 className="display rise text-[3.4rem] font-bold">What are you wearing?</h1>
+        <h1 className="rise text-2xl font-semibold tracking-tight">What are you wearing?</h1>
 
         <input
           ref={cameraRef}
@@ -178,7 +178,7 @@ export default function LogOutfitPage() {
             <img
               src={phase.lookUrl}
               alt="Your outfit, laid out on its own"
-              className="view-in h-full w-full bg-surface object-contain p-[8%] drop-shadow-[0_18px_22px_rgba(43,30,23,0.2)]"
+              className="view-in h-full w-full bg-surface object-contain p-[8%] drop-shadow-[0_18px_22px_rgba(80,60,120,0.2)]"
             />
           ) : preview ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -197,7 +197,7 @@ export default function LogOutfitPage() {
           )}
 
           {working && (
-            <span className="absolute inset-0 bg-[#2b1e17]/40" aria-live="polite">
+            <span className="absolute inset-0 bg-[#3b3a4a]/40" aria-live="polite">
               <span className="scan-line absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-transparent via-accent/50 to-transparent">
                 <span className="absolute inset-x-0 top-1/2 h-0.5 bg-accent shadow-[0_0_16px_2px_var(--accent)]" />
               </span>
