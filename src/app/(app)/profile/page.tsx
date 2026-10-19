@@ -11,6 +11,7 @@ import { PageSkeleton } from "@/components/PageSkeleton";
 import { DangerZone, NameForm, Streak } from "@/components/ProfileWidgets";
 import { SubmitButton } from "@/components/SubmitButton";
 import { spectrum } from "@/lib/colors";
+import { costPerWear, formatMoney } from "@/lib/looks";
 import { profileOf } from "@/lib/profile";
 import { withCoverPhotos } from "@/lib/queries";
 import { getUser } from "@/lib/supabase/server";
@@ -42,6 +43,10 @@ async function Profile() {
   const byCategory = CATEGORIES.map((c) => ({ c, n: items.filter((i) => i.category === c).length }))
     .filter(({ n }) => n > 0)
     .sort((a, b) => b.n - a.n);
+  const priced = items.filter((i) => i.price != null);
+  const totalValue = priced.reduce((sum, i) => sum + Number(i.price), 0);
+  const totalWears = priced.reduce((sum, i) => sum + i.times_worn, 0);
+  const bestValue = [...priced].sort((a, b) => costPerWear(a.price, a.times_worn)! - costPerWear(b.price, b.times_worn)!)[0];
   const joined = new Date(me.joined).toLocaleDateString(undefined, { month: "long", year: "numeric" });
 
   return (
@@ -111,6 +116,33 @@ async function Profile() {
               <p className="text-sm text-muted">Worn {mostWorn.times_worn} times</p>
             </div>
             <LinkPending />
+          </Link>
+        </section>
+      )}
+
+      {priced.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold">Wardrobe value</h2>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-2xl bg-surface p-4">
+              <p className="display text-3xl font-bold tabular-nums">{formatMoney(totalValue)}</p>
+              <p className="mt-1 text-sm text-muted">
+                spent on {priced.length} priced {priced.length === 1 ? "piece" : "pieces"}
+              </p>
+            </div>
+            <div className="rounded-2xl bg-surface p-4">
+              <p className="display text-3xl font-bold tabular-nums">{formatMoney(totalValue / Math.max(1, totalWears))}</p>
+              <p className="mt-1 text-sm text-muted">average cost per wear</p>
+            </div>
+          </div>
+          {bestValue && (
+            <Link href={`/items/${bestValue.id}`} className="block rounded-2xl bg-accent/10 p-4 text-sm">
+              Best value: <span className="font-semibold">{bestValue.name}</span> at{" "}
+              {formatMoney(costPerWear(bestValue.price, bestValue.times_worn)!)} a wear.
+            </Link>
+          )}
+          <Link href="/?sort=value" className="block text-center text-sm font-medium text-accent-strong">
+            Sort wardrobe by best value →
           </Link>
         </section>
       )}

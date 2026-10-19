@@ -78,10 +78,10 @@ export function InstallPrompt({ className = "" }: { className?: string }) {
   return (
     <section aria-label="Install the app" className={`rise rounded-[1.5rem] bg-surface p-4 ${className}`}>
       <div className="flex items-start gap-3">
-        <svg viewBox="0 0 512 512" className="h-11 w-11 shrink-0 rounded-[0.7rem]" aria-hidden>
-          <rect width="512" height="512" rx="112" fill="#2b1e17" />
-          <path d="M146 430V236a110 110 0 0 1 220 0v194z" fill="#f2c14e" />
-        </svg>
+        {/* The real home-screen icon (from `npm run icons`), so the preview always matches. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/icons/icon-192.png" alt="" width={44} height={44} className="h-11 w-11 shrink-0 rounded-[0.7rem]" />
+
         <div className="min-w-0 flex-1">
           <p className="font-semibold leading-snug">Put GRWM on your home screen</p>
           {platform === "ios" ? (

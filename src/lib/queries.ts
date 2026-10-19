@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { BoardPiece } from "@/components/LookBoard";
 import { signPhotos } from "./photos";
 import type { Outfit, WardrobeItem } from "./types";
 
@@ -32,6 +33,28 @@ export async function withCoverPhotos(
       cutoutUrl: item.cutout_path ? urls[item.cutout_path] : undefined,
     };
   });
+}
+
+/** The drawable bits of an item, for look boards in client components. */
+export function toBoardPiece(item: ItemWithPhoto): BoardPiece {
+  return {
+    id: item.id,
+    name: item.name,
+    category: item.category,
+    colors: item.colors,
+    cutoutUrl: item.cutoutUrl,
+    photoUrl: item.photo?.url,
+    box: item.cover_box,
+    photoW: item.photo?.w ?? 1,
+    photoH: item.photo?.h ?? 1,
+  };
+}
+
+/** Every piece in the wardrobe, ready to draw on a board. */
+export async function loadBoardPieces(supabase: SupabaseClient): Promise<BoardPiece[]> {
+  const { data } = await supabase.from("wardrobe_items_with_stats").select("*").order("created_at", { ascending: false });
+  const items = await withCoverPhotos(supabase, (data ?? []) as WardrobeItem[]);
+  return items.map(toBoardPiece);
 }
 
 /** Cut-out paths for items, tolerating a database that predates cut-outs. */

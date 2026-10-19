@@ -2,24 +2,38 @@
 import { mkdirSync, unlinkSync, writeFileSync, existsSync } from "node:fs";
 import sharp from "sharp";
 
-const ESPRESSO = "#2b1e17";
-const BUTTER = "#f2c14e";
+// Pastel glass: a lavender-to-blush tile with a white, pearly arched mirror.
+const LAVENDER = "#b8a4e8";
+const BLUSH = "#f0aecb";
+
+const defs = `<defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="${LAVENDER}"/>
+      <stop offset="1" stop-color="${BLUSH}"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#f6efff"/>
+    </linearGradient>
+  </defs>`;
 
 // Tab-size mark: a bigger arch and no highlight, so it stays crisp at 16px.
 const favicon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="${ESPRESSO}"/>
-  <path d="M120 440V232a136 136 0 0 1 272 0v208z" fill="${BUTTER}"/>
+  ${defs}
+  <rect width="512" height="512" rx="112" fill="url(#tile)"/>
+  <path d="M120 440V232a136 136 0 0 1 272 0v208z" fill="#fff"/>
 </svg>
 `;
 
-// Home-screen mark with the mirror highlight. `rounded` for browsers/Android, square for iOS.
+// Home-screen mark with the mirror's lavender reflection. `rounded` for browsers/Android, square for iOS.
 const appIcon = (rounded, scale = 1) => {
   const t = `translate(256 256) scale(${scale}) translate(-256 -256)`;
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" ${rounded ? 'rx="112"' : ""} fill="${ESPRESSO}"/>
+  ${defs}
+  <rect width="512" height="512" ${rounded ? 'rx="112"' : ""} fill="url(#tile)"/>
   <g transform="${t}">
-    <path d="M146 430V236a110 110 0 0 1 220 0v194z" fill="${BUTTER}"/>
-    <path d="M200 236a56 56 0 0 1 56-56" fill="none" stroke="#fff" stroke-width="20" stroke-linecap="round" opacity=".7"/>
+    <path d="M146 430V236a110 110 0 0 1 220 0v194z" fill="url(#glass)"/>
+    <path d="M200 236a56 56 0 0 1 56-56" fill="none" stroke="${LAVENDER}" stroke-width="20" stroke-linecap="round" opacity=".55"/>
   </g>
 </svg>
 `;

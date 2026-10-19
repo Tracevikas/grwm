@@ -4,6 +4,7 @@ import { swatch } from "@/lib/colors";
 import type { ItemWithPhoto } from "@/lib/queries";
 import { GarmentImage } from "./GarmentImage";
 import { LinkPending } from "./LinkPending";
+import { Tilt } from "./Motion";
 import { WornAgo } from "./WornAgo";
 
 export function ItemCard({ item, index = 0 }: { item: ItemWithPhoto; index?: number }) {
@@ -14,6 +15,7 @@ export function ItemCard({ item, index = 0 }: { item: ItemWithPhoto; index?: num
       style={{ "--i": index } as React.CSSProperties}
       className="group block rounded-[1.4rem] outline-offset-4"
     >
+      <Tilt>
       <div className="relative rounded-[1.4rem] transition duration-200 group-hover:-translate-y-0.5 group-active:scale-[0.97]">
         {/* Same name as the hero on the item page, so the image morphs between them. */}
         <ViewTransition name={`item-${item.id}`} share="morph" default="none">
@@ -35,6 +37,7 @@ export function ItemCard({ item, index = 0 }: { item: ItemWithPhoto; index?: num
         </span>
         <LinkPending />
       </div>
+      </Tilt>
       <p className="mt-2 line-clamp-1 px-1 text-[0.9rem] font-medium leading-snug">{item.name}</p>
       <p className="px-1 text-xs text-muted">
         {item.times_worn === 0 || !item.last_worn ? (

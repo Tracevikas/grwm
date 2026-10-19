@@ -15,6 +15,7 @@ export const SORTS = {
   forgotten: "Not worn lately",
   most: "Most worn",
   new: "Newest",
+  value: "Best value",
 } as const;
 export type SortKey = keyof typeof SORTS;
 

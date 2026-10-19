@@ -128,11 +128,20 @@ describe("BottomNav", () => {
     pathname = "/";
   });
 
-  it("has wardrobe, log and diary links", () => {
+  it("has wardrobe, today, log, looks and diary links", () => {
     render(<BottomNav />);
     expect(screen.getByRole("link", { name: "Wardrobe" })).toHaveAttribute("href", "/");
-    expect(screen.getByRole("link", { name: "Log outfit" })).toHaveAttribute("href", "/log");
+    expect(screen.getByRole("link", { name: "Today" })).toHaveAttribute("href", "/today");
+    expect(screen.getByRole("link", { name: "Log" })).toHaveAttribute("href", "/log");
+    expect(screen.getByRole("link", { name: "Looks" })).toHaveAttribute("href", "/looks");
     expect(screen.getByRole("link", { name: "Diary" })).toHaveAttribute("href", "/outfits");
+  });
+
+  it("marks Looks current on the shuffle and canvas pages", () => {
+    pathname = "/looks/shuffle";
+    render(<BottomNav />);
+    expect(screen.getByRole("link", { name: "Looks" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Wardrobe" })).not.toHaveAttribute("aria-current");
   });
 
   it("marks Wardrobe current on item pages and Diary on outfit pages", () => {

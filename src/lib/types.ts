@@ -54,7 +54,24 @@ export type WardrobeItem = {
   cover_box: Box | null;
   /** Missing until supabase/migrations/002_cutouts.sql has run. */
   cutout_path?: string | null;
+  /** What it cost; missing until supabase/migrations/005_looks_and_prices.sql has run. */
+  price?: number | null;
   created_at: string;
   times_worn: number;
   last_worn: string | null;
+};
+
+/** One piece placed on a look's board. x/y are the centre, 0–1 of the board. */
+export type Placement = { item_id: string; x: number; y: number; scale: number; rotate: number };
+
+export type LookSource = "today" | "shuffle" | "canvas";
+
+export type Look = {
+  id: string;
+  name: string;
+  source: LookSource;
+  layout: Placement[];
+  note: string | null;
+  planned_for: string | null;
+  created_at: string;
 };

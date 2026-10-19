@@ -5,7 +5,7 @@ import { Suspense, useActionState, useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { InstallPrompt } from "@/components/InstallPrompt";
 import { Spinner } from "@/components/Spinner";
-import { Wordmark } from "@/components/Wordmark";
+import { Landing } from "@/components/landing/Landing";
 import { sendCode, signInWithGoogle, verifyCode, type AuthState } from "./actions";
 
 const RESEND_AFTER = 60;
@@ -17,32 +17,14 @@ const LINK_ERRORS: Record<string, string> = {
 
 export default function LoginPage() {
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-sm flex-col px-6 pb-10 pt-8">
-      <Wordmark className="text-lg" />
-
-      <div className="relative mt-8">
-        <div className="mirror relative mx-auto aspect-[3/4] w-[70%] bg-accent">
-          <div className="absolute inset-0 bg-[radial-gradient(120%_70%_at_30%_15%,rgba(255,255,255,0.35),transparent_55%)]" />
-          <div className="absolute left-[18%] top-[14%] h-[22%] w-[10%] -rotate-12 rounded-full bg-white/40 blur-[2px]" />
-          <div className="sheen absolute -inset-y-1/4 left-0 w-1/3 bg-gradient-to-r from-transparent via-white/50 to-transparent" aria-hidden />
-        </div>
-        <h1 className="display rise absolute inset-x-0 bottom-[8%] text-center text-[2.8rem] font-extrabold text-accent-ink">
-          get ready
-          <br />
-          with me
-        </h1>
-      </div>
-
-      <p className="mt-6 text-center text-[1.05rem] leading-relaxed text-muted">
-        Snap your outfit each morning. Every piece gets saved, so you can plan tomorrow without opening the wardrobe.
-      </p>
-
-      {/* useSearchParams needs a boundary under Cache Components. */}
-      <Suspense fallback={<SignIn linkError={null} />}>
-        <SignInWithParams />
-      </Suspense>
-
-      <InstallPrompt className="mt-8" />
+    <main>
+      <Landing>
+        {/* useSearchParams needs a boundary under Cache Components. */}
+        <Suspense fallback={<SignIn linkError={null} />}>
+          <SignInWithParams />
+        </Suspense>
+        <InstallPrompt className="mt-6" />
+      </Landing>
     </main>
   );
 }
@@ -70,7 +52,7 @@ function SignIn({ linkError }: { linkError: string | null }) {
   const email = dismissed === sent ? undefined : sent.email;
 
   return (
-    <div className="mt-8 space-y-4">
+    <div className="mt-6 space-y-4">
       {linkError && !sent.email && (
         <p className="rounded-2xl bg-danger/10 p-3 text-sm text-danger" role="alert">
           {linkError}

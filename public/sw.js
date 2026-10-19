@@ -1,6 +1,6 @@
 // GRWM service worker: shows an offline screen when there's no connection.
 // Deliberately caches nothing else, so wardrobe data is always fresh and private.
-const CACHE = "grwm-offline-v1";
+const CACHE = "grwm-offline-v2";
 const OFFLINE_URL = "/offline.html";
 
 self.addEventListener("install", (event) => {

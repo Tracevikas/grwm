@@ -41,9 +41,12 @@ create table if not exists public.wardrobe_items (
   cover_box        jsonb,
   -- Transparent PNG of just the garment, when segmentation found it.
   cutout_path      text,
+  -- What it cost, for cost per wear. Optional.
+  price            numeric(10, 2) check (price >= 0),
   created_at       timestamptz not null default now()
 );
 alter table public.wardrobe_items add column if not exists cutout_path text;
+alter table public.wardrobe_items add column if not exists price numeric(10, 2) check (price >= 0);
 create index if not exists wardrobe_items_user_idx on public.wardrobe_items (user_id, category);
 
 -- Which items appear in which outfit, with where they are in that photo.
@@ -55,6 +58,21 @@ create table if not exists public.outfit_items (
   primary key (outfit_id, item_id)
 );
 create index if not exists outfit_items_item_idx on public.outfit_items (item_id);
+
+-- Saved looks (Today, Dress Me, canvas): pieces arranged on a board, optionally planned for a day.
+create table if not exists public.looks (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  name        text not null default 'Untitled look',
+  source      text not null default 'canvas' check (source in ('today', 'shuffle', 'canvas')),
+  -- Ordered pieces: [{ item_id, x, y, scale, rotate }] with x/y as 0–1 of the board.
+  layout      jsonb not null default '[]',
+  note        text,
+  planned_for date,
+  created_at  timestamptz not null default now()
+);
+create index if not exists looks_user_idx on public.looks (user_id, created_at desc);
+create index if not exists looks_planned_idx on public.looks (user_id, planned_for) where planned_for is not null;
 
 -- Wear stats per item, derived instead of stored so they never drift.
 drop view if exists public.wardrobe_items_with_stats;
@@ -73,6 +91,7 @@ group by i.id;
 alter table public.outfits        enable row level security;
 alter table public.wardrobe_items enable row level security;
 alter table public.outfit_items   enable row level security;
+alter table public.looks          enable row level security;
 
 drop policy if exists "own outfits" on public.outfits;
 create policy "own outfits" on public.outfits
@@ -84,6 +103,10 @@ create policy "own items" on public.wardrobe_items
 
 drop policy if exists "own outfit items" on public.outfit_items;
 create policy "own outfit items" on public.outfit_items
+  for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+drop policy if exists "own looks" on public.looks;
+create policy "own looks" on public.looks
   for all using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 -- Self-service account deletion (Profile → Delete my account). Only deletes the caller.

@@ -2,6 +2,7 @@ import { PageShell } from "@/components/PageShell";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { SORTS, WardrobeView, type SortKey } from "@/components/WardrobeView";
 import { spectrum } from "@/lib/colors";
+import { costPerWear } from "@/lib/looks";
 import { withCoverPhotos } from "@/lib/queries";
 import { getUser } from "@/lib/supabase/server";
 import { CATEGORIES, type Category, type WardrobeItem } from "@/lib/types";
@@ -12,6 +13,8 @@ const ORDER: Record<SortKey, { column: string; ascending: boolean }> = {
   forgotten: { column: "last_worn", ascending: true },
   most: { column: "times_worn", ascending: false },
   new: { column: "created_at", ascending: false },
+  // Cost per wear is worked out below; this is just a stable starting order.
+  value: { column: "created_at", ascending: false },
 };
 
 export default function WardrobePage(props: PageProps<"/">) {
@@ -48,6 +51,11 @@ async function Wardrobe(props: PageProps<"/">) {
   const rows = ((data ?? []) as WardrobeItem[]).filter(
     (i) => !color || i.colors[0]?.trim().toLowerCase() === color,
   );
+  // Best value: lowest cost per wear first, pieces without a price last.
+  if (sort === "value") {
+    const cpw = (i: WardrobeItem) => costPerWear(i.price, i.times_worn) ?? Infinity;
+    rows.sort((a, b) => cpw(a) - cpw(b));
+  }
   const items = await withCoverPhotos(supabase, rows);
   const everything = (all ?? []) as { colors: string[] }[];
 

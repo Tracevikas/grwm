@@ -9,6 +9,7 @@ import { PageSkeleton } from "@/components/PageSkeleton";
 import { SubmitButton } from "@/components/SubmitButton";
 import { WornAgo } from "@/components/WornAgo";
 import { swatch } from "@/lib/colors";
+import { costPerWear, formatMoney } from "@/lib/looks";
 import { dateParts, signPhotos } from "@/lib/photos";
 import { isProductShot } from "@/lib/outfit-look";
 import { withCoverPhotos } from "@/lib/queries";
@@ -48,6 +49,9 @@ async function ItemDetail(props: PageProps<"/items/[id]">) {
     .sort((a, b) => b.outfits.worn_on.localeCompare(a.outfits.worn_on));
   const urls = await signPhotos(supabase, worn.map((a) => a.outfits.photo_path));
   const sameCategory = (siblings ?? []).filter((s) => s.category === item.category);
+  // The price column arrives with migration 005; hide the field until then.
+  const hasPrice = "price" in item;
+  const cpw = costPerWear(item.price, item.times_worn);
 
   const facts = [
     ["Type", [CATEGORY_LABELS[item.category], item.subcategory].filter(Boolean).join(", ")],
@@ -104,6 +108,19 @@ async function ItemDetail(props: PageProps<"/items/[id]">) {
           </p>
           <p className="mt-1 text-sm text-muted">last time</p>
         </div>
+        {cpw != null && (
+          <div className="col-span-2 flex items-end justify-between rounded-2xl bg-surface p-4">
+            <div>
+              <p className="display text-4xl font-bold tabular-nums">{formatMoney(cpw)}</p>
+              <p className="mt-1 text-sm text-muted">cost per wear</p>
+            </div>
+            <p className="text-right text-sm text-muted">
+              {formatMoney(item.price!)} paid
+              <br />
+              {item.times_worn === 0 ? "wear it to bring this down" : `÷ ${item.times_worn} ${item.times_worn === 1 ? "wear" : "wears"}`}
+            </p>
+          </div>
+        )}
       </div>
 
       {item.description && <p className="text-[1.05rem] leading-relaxed">{item.description}</p>}
@@ -166,6 +183,12 @@ async function ItemDetail(props: PageProps<"/items/[id]">) {
               Colours, separated by commas
               <input name="colors" defaultValue={item.colors.join(", ")} className={`${field} mt-1 text-foreground`} />
             </label>
+            {hasPrice && (
+              <label className="block text-sm text-muted">
+                Price paid (optional, for cost per wear)
+                <input name="price" inputMode="decimal" defaultValue={item.price ?? ""} placeholder="e.g. 1499" className={`${field} mt-1 text-foreground`} />
+              </label>
+            )}
             <label className="block text-sm text-muted">
               Notes
               <textarea name="description" defaultValue={item.description ?? ""} rows={3} className={`${field} mt-1 h-auto py-3 text-foreground`} />

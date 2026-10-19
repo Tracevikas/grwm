@@ -89,15 +89,19 @@ export async function updateItem(itemId: string, formData: FormData) {
       .map((s) => s.trim())
       .filter(Boolean);
 
-  await supabase
-    .from("wardrobe_items")
-    .update({
-      name: String(formData.get("name") ?? "").trim() || "Untitled",
-      category: CATEGORIES.includes(category as Category) ? category : "other",
-      colors: csv("colors"),
-      description: String(formData.get("description") ?? "").trim() || null,
-    })
-    .eq("id", itemId);
+  const fields: Record<string, unknown> = {
+    name: String(formData.get("name") ?? "").trim() || "Untitled",
+    category: CATEGORIES.includes(category as Category) ? category : "other",
+    colors: csv("colors"),
+    description: String(formData.get("description") ?? "").trim() || null,
+  };
+  // Price is optional; only sent once the database has the column (migration 005).
+  if (formData.has("price")) {
+    const price = Number(String(formData.get("price")).replace(/[^\d.]/g, ""));
+    fields.price = String(formData.get("price")).trim() && Number.isFinite(price) && price >= 0 ? price : null;
+  }
+
+  await supabase.from("wardrobe_items").update(fields).eq("id", itemId);
   refreshEverything();
 }
 
